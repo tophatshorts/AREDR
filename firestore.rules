@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Profile Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'username', 'stats', 'upgrades', 'settings']) &&
+             data.uid == request.auth.uid &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 32;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) && isValidId(userId) && (request.method != 'write' || isValidUser(request.resource.data));
+    }
+
+    // Leaderboard Validation
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'username', 'demonName', 'demonPosition', 'rarity', 'rollsCount', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.username is string && data.username.size() <= 32 &&
+             data.demonPosition is int &&
+             data.rarity is int &&
+             data.rollsCount is int;
+    }
+
+    match /leaderboard/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(entryId) && isValidLeaderboardEntry(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidLeaderboardEntry(request.resource.data);
+      allow delete: if false; // Ranks are permanent until overwritten by owner
+    }
+  }
+}

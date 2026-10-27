@@ -1,0 +1,6 @@
+{
+  "name": "AREDR - All Rated Extreme Demon RNG",
+  "description": "The ultimate Geometry Dash Extreme Demon RNG. Roll for ranked levels from AREDL with balanced rarity, cloud profiles, cinematic cutscenes, and global leaderboards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

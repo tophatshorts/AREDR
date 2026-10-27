@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "user": {
+      "title": "User Profile",
+      "description": "Stores player progress, stats, and settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "avatarIcon": { "type": "string" },
+        "stats": { "type": "object" },
+        "upgrades": { "type": "object" },
+        "settings": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "username", "stats", "upgrades", "settings"]
+    },
+    "leaderboard_entry": {
+      "title": "Leaderboard Entry",
+      "description": "A public record of a player's hardest demon roll.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "maxLength": 32 },
+        "demonName": { "type": "string" },
+        "demonPosition": { "type": "integer" },
+        "rarity": { "type": "integer" },
+        "rollsCount": { "type": "integer" },
+        "timestamp": { "type": "integer" }
+      },
+      "required": ["userId", "username", "demonName", "demonPosition", "rarity", "rollsCount", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Private user profile and progress storage."
+    },
+    "/leaderboard/{entryId}": {
+      "schema": "leaderboard_entry",
+      "description": "Public global leaderboard records."
+    }
+  }
+}

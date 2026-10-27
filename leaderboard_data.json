@@ -1,0 +1,101 @@
+[
+  {
+    "id": "seed-1",
+    "username": "Zoink",
+    "demonName": "GRIEF",
+    "demonPosition": 1,
+    "rarity": 100000,
+    "rollsCount": 4120,
+    "timestamp": 1793063077771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-2",
+    "username": "Trick",
+    "demonName": "Artemis 13",
+    "demonPosition": 2,
+    "rarity": 98319,
+    "rollsCount": 3250,
+    "timestamp": 1793052277771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-3",
+    "username": "Doggie",
+    "demonName": "Society",
+    "demonPosition": 3,
+    "rarity": 96000,
+    "rollsCount": 2890,
+    "timestamp": 1793027077771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-4",
+    "username": "wPopoff",
+    "demonName": "Thinking Space II",
+    "demonPosition": 4,
+    "rarity": 94000,
+    "rollsCount": 2100,
+    "timestamp": 1792998277771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-5",
+    "username": "Diamond",
+    "demonName": "Amethyst",
+    "demonPosition": 5,
+    "rarity": 92000,
+    "rollsCount": 1940,
+    "timestamp": 1792962277771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-6",
+    "username": "Viprin",
+    "demonName": "Tidal Wave",
+    "demonPosition": 7,
+    "rarity": 89000,
+    "rollsCount": 1450,
+    "timestamp": 1792897477771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-7",
+    "username": "Riot",
+    "demonName": "Bloodbath",
+    "demonPosition": 500,
+    "rarity": 500,
+    "rollsCount": 420,
+    "timestamp": 1792782277771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "seed-8",
+    "username": "Neigendeu",
+    "demonName": "Acu",
+    "demonPosition": 1604,
+    "rarity": 4,
+    "rollsCount": 35,
+    "timestamp": 1792746277771,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  },
+  {
+    "id": "rec-1793070475356-rqat",
+    "username": "Dasher_9214",
+    "demonName": "Through The Decay",
+    "demonPosition": 1606,
+    "rarity": 2,
+    "rollsCount": 1,
+    "timestamp": 1793070475356,
+    "dateStr": "2026-10-27",
+    "monthStr": "2026-10"
+  }
+]
