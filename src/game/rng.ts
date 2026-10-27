@@ -61,6 +61,15 @@ export const KEYS_MULTIPLIER_LEVELS = [
 export const QUICK_ROLL_COST = 250; // Half of 500
 export const AUTO_ROLL_COST = 500; // Half of 1000
 
+export const QUICK_ROLL_SPEED_LEVELS = [
+  { level: 0, durationMs: 700, autoDelayMs: 650, label: 'Base Speed (0.70s)', cost: 0 },
+  { level: 1, durationMs: 550, autoDelayMs: 500, label: 'Velocity I (0.55s)', cost: 300 },
+  { level: 2, durationMs: 420, autoDelayMs: 380, label: 'Velocity II (0.42s)', cost: 1200 },
+  { level: 3, durationMs: 320, autoDelayMs: 280, label: 'Velocity III (0.32s)', cost: 4000 },
+  { level: 4, durationMs: 240, autoDelayMs: 200, label: 'Overclocked (0.24s)', cost: 15000 },
+  { level: 5, durationMs: 180, autoDelayMs: 140, label: 'Hyperspeed (0.18s)', cost: 50000 },
+];
+
 export const PITY_LEVELS = [
   { level: 0, rollsNeeded: 0, guaranteedPos: 1644, label: 'No Pity', cost: 0 },
   { level: 1, rollsNeeded: 60, guaranteedPos: 800, label: 'Gatekeeper I (Top 800)', cost: 500 }, // Half of 1000

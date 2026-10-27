@@ -5,12 +5,13 @@ import {
   KEYS_MULTIPLIER_LEVELS,
   PITY_LEVELS,
   STREAK_LEVELS,
+  QUICK_ROLL_SPEED_LEVELS,
   QUICK_ROLL_COST,
   AUTO_ROLL_COST,
   formatNumber
 } from '../game/rng';
 import { sound } from '../game/sound';
-import { X, Sparkles, Zap, ShieldAlert, Flame, Check, Key } from 'lucide-react';
+import { X, Sparkles, Zap, ShieldAlert, Flame, Check, Key, Gauge } from 'lucide-react';
 
 interface Props {
   upgrades: PlayerUpgrades;
@@ -20,6 +21,7 @@ interface Props {
   onUpgradePity: (cost: number) => void;
   onUpgradeStreak: (cost: number) => void;
   onBuyQuickRoll: (cost: number) => void;
+  onUpgradeQuickRollSpeed?: (cost: number) => void;
   onBuyAutoRoll: (cost: number) => void;
   onClose: () => void;
 }
@@ -32,6 +34,7 @@ export const UpgradesModal: React.FC<Props> = ({
   onUpgradePity,
   onUpgradeStreak,
   onBuyQuickRoll,
+  onUpgradeQuickRollSpeed,
   onBuyAutoRoll,
   onClose,
 }) => {
@@ -148,7 +151,7 @@ export const UpgradesModal: React.FC<Props> = ({
                 <div>
                   <h3 className="font-display font-bold text-sm text-white">Quick Roll Mode</h3>
                   <p className="text-xs text-zinc-400 mt-1 font-sans">
-                    Unlocks 1-second rapid spin mode (bypasses normal 3-5s CS2 roulette).
+                    Unlocks rapid spin mode (bypasses normal 3.2s CS2 roulette).
                   </p>
                   <div className="mt-2 text-xs font-mono text-sky-400 font-bold">
                     {upgrades.hasQuickRoll ? 'Unlocked' : 'Locked'}
@@ -180,6 +183,62 @@ export const UpgradesModal: React.FC<Props> = ({
               )}
             </div>
           </div>
+
+          {/* UPGRADE 2B: QUICK ROLL SPEED / VELOCITY (Amber / Cyan) */}
+          {upgrades.hasQuickRoll && (
+            <div className="p-4 rounded-2xl bg-zinc-900/60 border border-amber-500/20 hover:border-amber-500/40 transition-all duration-200">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                    <Gauge className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-sm text-white">Quick Roll Velocity</h3>
+                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-950/60 text-amber-300 font-mono border border-amber-500/30">
+                        Lvl {upgrades.quickRollSpeedLevel || 0}/{QUICK_ROLL_SPEED_LEVELS.length - 1}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 font-sans">
+                      Increases rotation speed and reduces delay for Quick & Auto Rolls.
+                    </p>
+                    <div className="mt-2 text-xs font-mono text-zinc-300">
+                      Current: <span className="text-amber-400 font-bold">{QUICK_ROLL_SPEED_LEVELS[upgrades.quickRollSpeedLevel || 0]?.label}</span>
+                      {QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1] && (
+                        <>
+                          {' '}→ Next: <span className="text-cyan-300 font-bold">{QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].label}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1] ? (
+                  <button
+                    onClick={() => {
+                      const nextCost = QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost;
+                      if (currentKeys >= nextCost && onUpgradeQuickRollSpeed) {
+                        sound.playRareChime();
+                        onUpgradeQuickRollSpeed(nextCost);
+                      }
+                    }}
+                    disabled={currentKeys < QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
+                      currentKeys >= QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost
+                        ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.35)]'
+                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {formatNumber(QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost)} Keys
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-bold text-amber-400 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <Check className="w-3.5 h-3.5" /> MAX
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* UPGRADE 3: AUTO ROLL (Neon Fuchsia / Violet) */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-fuchsia-500/20 hover:border-fuchsia-500/40 transition-all duration-200">

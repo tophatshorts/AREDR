@@ -2,11 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { DemonLevel } from '../game/types';
 import { sound } from '../game/sound';
 
+import { QUICK_ROLL_SPEED_LEVELS } from '../game/rng';
+
 interface Props {
   targetDemon: DemonLevel | null;
   allDemons: DemonLevel[];
   isSpinning: boolean;
   isQuickRoll: boolean;
+  quickRollSpeedLevel?: number;
   onSpinComplete: () => void;
 }
 
@@ -22,6 +25,7 @@ export const CS2Spinner: React.FC<Props> = ({
   allDemons,
   isSpinning,
   isQuickRoll,
+  quickRollSpeedLevel = 0,
   onSpinComplete,
 }) => {
   const [cards, setCards] = useState<ReelCard[]>([]);
@@ -92,7 +96,8 @@ export const CS2Spinner: React.FC<Props> = ({
       const jitter = (Math.random() - 0.5) * 40;
       const finalTranslate = -(targetOffset + jitter);
 
-      const durationMs = isQuickRoll ? 280 : targetDemon.position <= 150 ? 4500 : 3200;
+      const speedTier = QUICK_ROLL_SPEED_LEVELS[quickRollSpeedLevel || 0] || QUICK_ROLL_SPEED_LEVELS[0];
+      const durationMs = isQuickRoll ? speedTier.durationMs : targetDemon.position <= 150 ? 4500 : 3200;
 
       // Play start sound
       sound.playRollWhoosh();
@@ -101,8 +106,9 @@ export const CS2Spinner: React.FC<Props> = ({
       if (timersRef.current.tick) clearInterval(timersRef.current.tick);
       if (isQuickRoll) {
         sound.playTickerTick();
-        setTimeout(() => sound.playTickerTick(), 90);
-        setTimeout(() => sound.playTickerTick(), 180);
+        const step = Math.max(50, Math.floor(durationMs / 3));
+        setTimeout(() => sound.playTickerTick(), step);
+        setTimeout(() => sound.playTickerTick(), step * 2);
       } else {
         let ticksCount = 0;
         const maxTicks = targetIndex;
@@ -133,13 +139,11 @@ export const CS2Spinner: React.FC<Props> = ({
     } else if (!isSpinning) {
       isSpinningRef.current = false;
     }
-  }, [isSpinning, targetDemon, allDemons, isQuickRoll, onSpinComplete]);
+  }, [isSpinning, targetDemon, allDemons, isQuickRoll, quickRollSpeedLevel, onSpinComplete]);
 
-  const spinDurationSec = isQuickRoll
-    ? '0.28s'
-    : targetDemon && targetDemon.position <= 150
-    ? '4.5s'
-    : '3.2s';
+  const speedTier = QUICK_ROLL_SPEED_LEVELS[quickRollSpeedLevel || 0] || QUICK_ROLL_SPEED_LEVELS[0];
+  const currentDurationMs = isQuickRoll ? speedTier.durationMs : targetDemon && targetDemon.position <= 150 ? 4500 : 3200;
+  const spinDurationSec = `${(currentDurationMs / 1000).toFixed(2)}s`;
   const spinTimingFunc = isQuickRoll
     ? 'cubic-bezier(0.15, 0.85, 0.35, 1.0)'
     : targetDemon && targetDemon.position <= 150

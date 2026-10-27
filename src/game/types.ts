@@ -21,7 +21,8 @@ export type DemonTier = 'top1' | 'top10' | 'top150' | 'extended' | 'common';
 
 export interface PlayerUpgrades {
   luckLevel: number; // 0 to 9
-  hasQuickRoll: boolean; // Buyable upgrade for 1s quick spins
+  hasQuickRoll: boolean; // Buyable upgrade for quick spins
+  quickRollSpeedLevel?: number; // 0 to 5 (Upgrades speed of quick rolls)
   hasAutoRoll: boolean; // Buyable upgrade for continuous auto-rolling
   keysMultiplierLevel: number; // 0 to 5
   pityTierLevel: number; // 0 to 4
