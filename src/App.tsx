@@ -47,6 +47,18 @@ import {
 
 import fallbackDemonsRaw from './data/demons.json';
 
+function sanitizeUsername(name?: string | null): string {
+  if (!name) return 'Dasher_' + Math.floor(1000 + Math.random() * 9000);
+  let cleaned = name.trim();
+  if (cleaned.length < 3) {
+    cleaned = (cleaned + 'Dasher').slice(0, 8);
+  }
+  if (cleaned.length < 3) {
+    cleaned = 'Dasher_' + Math.floor(1000 + Math.random() * 9000);
+  }
+  return cleaned.slice(0, 32);
+}
+
 const STORAGE_KEY = 'GD_EXTREME_DEMON_RNG_SAVE_V2';
 
 const DEFAULT_UPGRADES: PlayerUpgrades = {
@@ -133,11 +145,16 @@ export default function App() {
 
   // Save Profile Helper (Updates localStorage & Firestore cleanly)
   const saveProfileToStorage = useCallback(
-    async (targetProfile: PlayerProfile, syncCloudNow: boolean = false) => {
+    async (targetProfile: PlayerProfile, syncCloudNow: boolean = true) => {
       if (!targetProfile) return;
 
+      const sanitized: PlayerProfile = {
+        ...targetProfile,
+        username: sanitizeUsername(targetProfile.username),
+      };
+
       // 1. Immediate Local Storage Update
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(targetProfile));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
 
       // 2. Visual Save Status Feedback
       setSaveStatus('saving');
@@ -147,13 +164,13 @@ export default function App() {
         setSaveStatus('saved');
         saveStatusTimerRef.current = setTimeout(() => {
           setSaveStatus('idle');
-        }, 2000);
-      }, 300);
+        }, 1500);
+      }, 200);
 
       // 3. Cloud Sync if user is signed in
       if (user && syncCloudNow) {
         try {
-          await setDoc(doc(db, 'users', user.uid), targetProfile);
+          await setDoc(doc(db, 'users', user.uid), sanitized);
         } catch (e) {
           console.warn('Cloud sync error:', e);
         }
@@ -162,20 +179,26 @@ export default function App() {
     [user]
   );
 
-  // Profile Loading Logic
+  // Profile Loading Logic (Preserves higher local progress over old cloud snapshots)
   const loadProfile = useCallback(async () => {
+    const savedLocalStr = localStorage.getItem(STORAGE_KEY);
+    let localProfile: PlayerProfile | null = null;
+    if (savedLocalStr) {
+      try {
+        localProfile = JSON.parse(savedLocalStr);
+      } catch (e) {
+        console.warn('Failed to parse local profile save:', e);
+      }
+    }
+
     if (isGuest && !user) {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          setProfile(JSON.parse(saved));
-        } catch (e) {
-          console.warn('Error parsing local guest save:', e);
-        }
+      if (localProfile) {
+        localProfile.username = sanitizeUsername(localProfile.username);
+        setProfile(localProfile);
       } else {
         const initial: PlayerProfile = {
           id: 'guest-' + Math.random().toString(36).slice(2, 9),
-          username: 'Guest_' + Math.floor(1000 + Math.random() * 9000),
+          username: sanitizeUsername('Guest_' + Math.floor(1000 + Math.random() * 9000)),
           createdAt: Date.now(),
           lastActive: Date.now(),
           avatarIcon: 'demon',
@@ -206,18 +229,41 @@ export default function App() {
 
       if (docSnap.exists()) {
         const cloudProfile = docSnap.data() as PlayerProfile;
-        setProfile(cloudProfile);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudProfile));
+        let finalProfile = cloudProfile;
+
+        // Compare local save and cloud save: keep whichever has more progress!
+        if (localProfile) {
+          const localRolls = localProfile.stats?.totalRolls || 0;
+          const cloudRolls = cloudProfile.stats?.totalRolls || 0;
+          const localKeys = localProfile.stats?.totalKeysEarned || 0;
+          const cloudKeys = cloudProfile.stats?.totalKeysEarned || 0;
+
+          if (localRolls > cloudRolls || (localRolls === cloudRolls && localKeys > cloudKeys)) {
+            finalProfile = {
+              ...localProfile,
+              id: user.uid,
+              username: sanitizeUsername(user.displayName || localProfile.username),
+            };
+            // Instantly sync higher local progress up to cloud
+            await setDoc(docRef, finalProfile).catch((e) => console.warn('Cloud merge setDoc failed:', e));
+          }
+        }
+
+        finalProfile.username = sanitizeUsername(finalProfile.username || user.displayName);
+        setProfile(finalProfile);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalProfile));
       } else {
-        const saved = localStorage.getItem(STORAGE_KEY);
         let initial: PlayerProfile;
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          initial = { ...parsed, id: user.uid, username: user.displayName || parsed.username || 'Dasher' };
+        if (localProfile) {
+          initial = {
+            ...localProfile,
+            id: user.uid,
+            username: sanitizeUsername(user.displayName || localProfile.username),
+          };
         } else {
           initial = {
             id: user.uid,
-            username: user.displayName || 'Dasher_' + Math.floor(1000 + Math.random() * 9000),
+            username: sanitizeUsername(user.displayName),
             createdAt: Date.now(),
             lastActive: Date.now(),
             avatarIcon: 'demon',
@@ -234,10 +280,13 @@ export default function App() {
         }
         setProfile(initial);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        await setDoc(docRef, initial);
+        await setDoc(docRef, initial).catch((e) => console.warn('Initial cloud setDoc failed:', e));
       }
     } catch (e) {
       console.error('Error syncing profile:', e);
+      if (localProfile) {
+        setProfile(localProfile);
+      }
     }
   }, [user, isGuest]);
 
@@ -245,16 +294,23 @@ export default function App() {
     loadProfile();
   }, [loadProfile]);
 
-  // Periodic Background Cloud Sync (Every 6s while active)
+  // Periodic Background Persistence (Every 3s while active)
   useEffect(() => {
-    if (!user || !profile) return;
+    if (!profile) return;
 
     const interval = setInterval(() => {
       const current = profileRef.current;
       if (current) {
-        setDoc(doc(db, 'users', user.uid), current).catch(() => {});
+        const sanitized: PlayerProfile = {
+          ...current,
+          username: sanitizeUsername(current.username),
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+        if (user) {
+          setDoc(doc(db, 'users', user.uid), sanitized).catch(() => {});
+        }
       }
-    }, 6000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [user, profile?.id]);
@@ -940,69 +996,83 @@ export default function App() {
           stats={profile.stats}
           onClose={() => setShowUpgrades(false)}
           onUpgradeLuck={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, luckLevel: profile.upgrades.luckLevel + 1 },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, luckLevel: current.upgrades.luckLevel + 1 },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onUpgradeKeysMult={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, keysMultiplierLevel: profile.upgrades.keysMultiplierLevel + 1 },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, keysMultiplierLevel: current.upgrades.keysMultiplierLevel + 1 },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onUpgradePity={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, pityTierLevel: profile.upgrades.pityTierLevel + 1 },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, pityTierLevel: current.upgrades.pityTierLevel + 1 },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onUpgradeStreak={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, streakChargeLevel: profile.upgrades.streakChargeLevel + 1 },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, streakChargeLevel: current.upgrades.streakChargeLevel + 1 },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onBuyQuickRoll={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, hasQuickRoll: true },
-              settings: { ...profile.settings, quickRoll: true },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, hasQuickRoll: true },
+              settings: { ...current.settings, quickRoll: true },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onUpgradeQuickRollSpeed={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
               upgrades: {
-                ...profile.upgrades,
-                quickRollSpeedLevel: (profile.upgrades.quickRollSpeedLevel || 0) + 1,
+                ...current.upgrades,
+                quickRollSpeedLevel: (current.upgrades.quickRollSpeedLevel || 0) + 1,
               },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
           }}
           onBuyAutoRoll={(cost) => {
+            const current = profileRef.current;
+            if (!current) return;
             const updated = {
-              ...profile,
-              stats: { ...profile.stats, currentKeys: profile.stats.currentKeys - cost },
-              upgrades: { ...profile.upgrades, hasAutoRoll: true },
-              settings: { ...profile.settings, autoRoll: true },
+              ...current,
+              stats: { ...current.stats, currentKeys: current.stats.currentKeys - cost },
+              upgrades: { ...current.upgrades, hasAutoRoll: true },
+              settings: { ...current.settings, autoRoll: true },
             };
             setProfile(updated);
             saveProfileToStorage(updated, true);
@@ -1037,10 +1107,12 @@ export default function App() {
           profile={profile}
           user={user}
           onUpdateProfileName={(n) => {
-            const updated = { ...profile, username: n };
+            const current = profileRef.current;
+            if (!current) return;
+            const updated = { ...current, username: sanitizeUsername(n) };
             setProfile(updated);
             saveProfileToStorage(updated, true);
-            if (profile.stats.hardestDemon) {
+            if (current.stats.hardestDemon) {
               submitToLeaderboard();
             }
           }}
