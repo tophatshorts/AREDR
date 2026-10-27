@@ -398,7 +398,7 @@ export default function App() {
           {/* Logo & Title Lockup */}
           <div className="flex items-center gap-3.5">
             <img
-              src="/assets/aistudio/IMG_7950_e702d8b3.png"
+              src="./assets/aistudio/IMG_7950_e702d8b3.png"
               alt="AREDR"
               className="h-8 sm:h-9 w-auto object-contain drop-shadow-[0_2px_12px_rgba(245,158,11,0.35)]"
             />
@@ -417,7 +417,7 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Demon Keys Currency Chip */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 font-mono font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-              <img src="/assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
+              <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
               <span>{formatNumber(profile.stats.currentKeys)}</span>
             </div>
 

@@ -58,7 +58,7 @@ export const UpgradesModal: React.FC<Props> = ({
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 border border-cyan-400/30 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.2)]">
               <img
-                src="/assets/aistudio/IMG_7942_07b1ead5.png"
+                src="./assets/aistudio/IMG_7942_07b1ead5.png"
                 alt="Demon Key"
                 className="w-6 h-6 object-contain drop-shadow"
               />
