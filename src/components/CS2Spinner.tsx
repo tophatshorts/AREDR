@@ -164,7 +164,8 @@ export const CS2Spinner: React.FC<Props> = ({
       <div
         className="flex gap-2 px-4 transition-transform"
         style={{
-          transform: `translateX(${translateX}px)`,
+          transform: `translate3d(${translateX}px, 0, 0)`,
+          willChange: 'transform',
           transitionDuration: activeTransition ? spinDurationSec : '0s',
           transitionTimingFunction: spinTimingFunc,
         }}

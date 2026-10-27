@@ -14,7 +14,10 @@ import {
   executeRoll,
   formatNumber,
   getEffectiveLuck,
+  LUCK_LEVELS,
+  KEYS_MULTIPLIER_LEVELS,
   PITY_LEVELS,
+  STREAK_LEVELS,
   QUICK_ROLL_COST,
   AUTO_ROLL_COST,
   QUICK_ROLL_SPEED_LEVELS,
@@ -57,6 +60,45 @@ function sanitizeUsername(name?: string | null): string {
     cleaned = 'Dasher_' + Math.floor(1000 + Math.random() * 9000);
   }
   return cleaned.slice(0, 32);
+}
+
+function normalizeProfile(raw: any): PlayerProfile {
+  if (!raw || typeof raw !== 'object') raw = {};
+  return {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : 'guest-' + Math.random().toString(36).slice(2, 9),
+    username: sanitizeUsername(raw.username),
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+    lastActive: Date.now(),
+    avatarIcon: typeof raw.avatarIcon === 'string' ? raw.avatarIcon : 'demon',
+    upgrades: {
+      luckLevel: typeof raw?.upgrades?.luckLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.luckLevel), LUCK_LEVELS.length - 1) : 0,
+      hasQuickRoll: Boolean(raw?.upgrades?.hasQuickRoll),
+      quickRollSpeedLevel: typeof raw?.upgrades?.quickRollSpeedLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.quickRollSpeedLevel), QUICK_ROLL_SPEED_LEVELS.length - 1) : 0,
+      hasAutoRoll: Boolean(raw?.upgrades?.hasAutoRoll),
+      keysMultiplierLevel: typeof raw?.upgrades?.keysMultiplierLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.keysMultiplierLevel), KEYS_MULTIPLIER_LEVELS.length - 1) : 0,
+      pityTierLevel: typeof raw?.upgrades?.pityTierLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.pityTierLevel), PITY_LEVELS.length - 1) : 0,
+      streakChargeLevel: typeof raw?.upgrades?.streakChargeLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.streakChargeLevel), STREAK_LEVELS.length - 1) : 0,
+    },
+    stats: {
+      totalRolls: typeof raw?.stats?.totalRolls === 'number' ? raw.stats.totalRolls : 0,
+      totalKeysEarned: typeof raw?.stats?.totalKeysEarned === 'number' ? raw.stats.totalKeysEarned : 0,
+      currentKeys: typeof raw?.stats?.currentKeys === 'number' ? raw.stats.currentKeys : 0,
+      hardestDemon: raw?.stats?.hardestDemon || null,
+      hardestRollNumber: typeof raw?.stats?.hardestRollNumber === 'number' ? raw.stats.hardestRollNumber : 0,
+      hardestTimestamp: raw?.stats?.hardestTimestamp || null,
+      unlockedDemonIds: Array.isArray(raw?.stats?.unlockedDemonIds) ? raw.stats.unlockedDemonIds : [],
+      recentRolls: Array.isArray(raw?.stats?.recentRolls) ? raw.stats.recentRolls : [],
+      sessionHardest: raw?.stats?.sessionHardest || null,
+      streakWithoutTop150: typeof raw?.stats?.streakWithoutTop150 === 'number' ? raw.stats.streakWithoutTop150 : 0,
+    },
+    settings: {
+      autoRoll: Boolean(raw?.settings?.autoRoll),
+      quickRoll: Boolean(raw?.settings?.quickRoll),
+      autoRollStopRank: typeof raw?.settings?.autoRollStopRank === 'number' ? raw.settings.autoRollStopRank : null,
+      soundEnabled: raw?.settings?.soundEnabled !== undefined ? Boolean(raw.settings.soundEnabled) : true,
+      screenShake: raw?.settings?.screenShake !== undefined ? Boolean(raw.settings.screenShake) : true,
+    },
+  };
 }
 
 const STORAGE_KEY = 'GD_EXTREME_DEMON_RNG_SAVE_V2';
@@ -148,10 +190,7 @@ export default function App() {
     async (targetProfile: PlayerProfile, syncCloudNow: boolean = true) => {
       if (!targetProfile) return;
 
-      const sanitized: PlayerProfile = {
-        ...targetProfile,
-        username: sanitizeUsername(targetProfile.username),
-      };
+      const sanitized = normalizeProfile(targetProfile);
 
       // 1. Immediate Local Storage Update
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
@@ -185,36 +224,16 @@ export default function App() {
     let localProfile: PlayerProfile | null = null;
     if (savedLocalStr) {
       try {
-        localProfile = JSON.parse(savedLocalStr);
+        localProfile = normalizeProfile(JSON.parse(savedLocalStr));
       } catch (e) {
         console.warn('Failed to parse local profile save:', e);
       }
     }
 
     if (isGuest && !user) {
-      if (localProfile) {
-        localProfile.username = sanitizeUsername(localProfile.username);
-        setProfile(localProfile);
-      } else {
-        const initial: PlayerProfile = {
-          id: 'guest-' + Math.random().toString(36).slice(2, 9),
-          username: sanitizeUsername('Guest_' + Math.floor(1000 + Math.random() * 9000)),
-          createdAt: Date.now(),
-          lastActive: Date.now(),
-          avatarIcon: 'demon',
-          upgrades: DEFAULT_UPGRADES,
-          stats: DEFAULT_STATS,
-          settings: {
-            autoRoll: false,
-            quickRoll: false,
-            autoRollStopRank: null,
-            soundEnabled: true,
-            screenShake: true,
-          },
-        };
-        setProfile(initial);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      }
+      const activeProfile = localProfile || normalizeProfile({ username: 'Guest_' + Math.floor(1000 + Math.random() * 9000) });
+      setProfile(activeProfile);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(activeProfile));
       return;
     }
 
@@ -228,65 +247,44 @@ export default function App() {
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const cloudProfile = docSnap.data() as PlayerProfile;
+        const cloudProfile = normalizeProfile(docSnap.data());
         let finalProfile = cloudProfile;
 
         // Compare local save and cloud save: keep whichever has more progress!
         if (localProfile) {
-          const localRolls = localProfile.stats?.totalRolls || 0;
-          const cloudRolls = cloudProfile.stats?.totalRolls || 0;
-          const localKeys = localProfile.stats?.totalKeysEarned || 0;
-          const cloudKeys = cloudProfile.stats?.totalKeysEarned || 0;
+          const localRolls = localProfile.stats.totalRolls;
+          const cloudRolls = cloudProfile.stats.totalRolls;
+          const localKeys = localProfile.stats.totalKeysEarned;
+          const cloudKeys = cloudProfile.stats.totalKeysEarned;
 
           if (localRolls > cloudRolls || (localRolls === cloudRolls && localKeys > cloudKeys)) {
-            finalProfile = {
+            finalProfile = normalizeProfile({
               ...localProfile,
               id: user.uid,
-              username: sanitizeUsername(user.displayName || localProfile.username),
-            };
-            // Instantly sync higher local progress up to cloud
+              username: user.displayName || localProfile.username,
+            });
             await setDoc(docRef, finalProfile).catch((e) => console.warn('Cloud merge setDoc failed:', e));
           }
         }
 
+        finalProfile.id = user.uid;
         finalProfile.username = sanitizeUsername(finalProfile.username || user.displayName);
         setProfile(finalProfile);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(finalProfile));
       } else {
-        let initial: PlayerProfile;
-        if (localProfile) {
-          initial = {
-            ...localProfile,
-            id: user.uid,
-            username: sanitizeUsername(user.displayName || localProfile.username),
-          };
-        } else {
-          initial = {
-            id: user.uid,
-            username: sanitizeUsername(user.displayName),
-            createdAt: Date.now(),
-            lastActive: Date.now(),
-            avatarIcon: 'demon',
-            upgrades: DEFAULT_UPGRADES,
-            stats: DEFAULT_STATS,
-            settings: {
-              autoRoll: false,
-              quickRoll: false,
-              autoRollStopRank: null,
-              soundEnabled: true,
-              screenShake: true,
-            },
-          };
-        }
+        const initial = normalizeProfile(
+          localProfile
+            ? { ...localProfile, id: user.uid, username: user.displayName || localProfile.username }
+            : { id: user.uid, username: user.displayName }
+        );
         setProfile(initial);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
         await setDoc(docRef, initial).catch((e) => console.warn('Initial cloud setDoc failed:', e));
       }
     } catch (e) {
       console.error('Error syncing profile:', e);
-      if (localProfile) {
-        setProfile(localProfile);
-      }
+      const fallback = localProfile || normalizeProfile({ id: user.uid, username: user.displayName });
+      setProfile(fallback);
     }
   }, [user, isGuest]);
 
@@ -331,7 +329,7 @@ export default function App() {
     }
   }
 
-  // Load Demons data with live fetch
+  // Load Demons data with live fetch (Fast 2s AbortController timeout for instant mobile/iPad load)
   useEffect(() => {
     async function loadDemons() {
       setIsLoadingDemons(true);
@@ -339,7 +337,12 @@ export default function App() {
       let demonList = [...fallbackDemonsRaw] as any[];
 
       try {
-        const response = await fetch('https://aredl.pages.dev/api/levels');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        const response = await fetch('https://aredl.pages.dev/api/levels', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (response.ok) {
           const liveData = await response.json();
           const liveMap = new Map();
@@ -361,7 +364,7 @@ export default function App() {
           });
         }
       } catch (e) {
-        console.warn('Failed to fetch live demons, using fallback:', e);
+        console.warn('Live demons fetch timed out or offline, instantly loaded bundled dataset:', e);
       }
 
       const bundled = demonList.map((d) => ({
@@ -375,12 +378,15 @@ export default function App() {
     loadDemons();
   }, []);
 
-  // Fetch Daily Hardest
+  // Fetch Daily Hardest (Fast 1.5s Promise.race timeout)
   async function fetchDailyHardest() {
     try {
       const q = query(collection(db, 'leaderboard'), orderBy('demonPosition', 'asc'), limit(1));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
+      const fetchPromise = getDocs(q);
+      const timeoutPromise = new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500));
+
+      const snap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
+      if (snap && !snap.empty) {
         const top = snap.docs[0].data();
         setDailyHardest({
           username: top.username,
@@ -493,7 +499,20 @@ export default function App() {
       ? currentProf.stats.unlockedDemonIds
       : [...currentProf.stats.unlockedDemonIds, result.demon.id];
 
-    const recent = [result, ...currentProf.stats.recentRolls.slice(0, 24)];
+    const lightweightResult: RollResult = {
+      ...result,
+      demon: {
+        id: result.demon.id,
+        name: result.demon.name,
+        position: result.demon.position,
+        publisher: result.demon.publisher || 'Unknown',
+        verifier: result.demon.verifier || 'Unknown',
+        points: result.demon.points || 0,
+        baseRarity: result.demon.baseRarity || 1,
+        level_id: result.demon.level_id || null,
+      },
+    };
+    const recent = [lightweightResult, ...currentProf.stats.recentRolls.slice(0, 19)];
     const newStreak = result.demon.position <= 150 ? 0 : currentProf.stats.streakWithoutTop150 + 1;
 
     let shouldStopAutoRoll = false;
@@ -591,11 +610,19 @@ export default function App() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#08090d] flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-zinc-400 font-mono text-xs">Loading Profile...</p>
+      </div>
+    );
+  }
 
-  const { totalLuck, streakLuck } = getEffectiveLuck(profile.upgrades, profile.stats.streakWithoutTop150);
-  const pityTier = PITY_LEVELS[profile.upgrades.pityTierLevel];
-  const pityProgress = pityTier.rollsNeeded > 0 ? profile.stats.totalRolls % pityTier.rollsNeeded : 0;
+  const { totalLuck, streakLuck } = getEffectiveLuck(profile.upgrades, profile.stats?.streakWithoutTop150 || 0);
+  const pityTierIndex = Math.min(Math.max(0, profile.upgrades?.pityTierLevel || 0), PITY_LEVELS.length - 1);
+  const pityTier = PITY_LEVELS[pityTierIndex] || PITY_LEVELS[0];
+  const pityProgress = pityTier.rollsNeeded > 0 ? (profile.stats?.totalRolls || 0) % pityTier.rollsNeeded : 0;
   const displayDemon = pendingRollResult ? pendingRollResult.demon : currentResult ? currentResult.demon : null;
 
   return (
