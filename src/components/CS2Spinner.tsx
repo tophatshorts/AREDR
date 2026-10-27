@@ -30,10 +30,30 @@ export const CS2Spinner: React.FC<Props> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const targetIndex = 36;
   const isSpinningRef = useRef<boolean>(false);
+  const timersRef = useRef<{
+    tick?: NodeJS.Timeout;
+    start?: NodeJS.Timeout;
+    finish?: NodeJS.Timeout;
+  }>({});
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timersRef.current.tick) clearInterval(timersRef.current.tick);
+      if (timersRef.current.start) clearTimeout(timersRef.current.start);
+      if (timersRef.current.finish) clearTimeout(timersRef.current.finish);
+      isSpinningRef.current = false;
+    };
+  }, []);
 
   // Trigger spin whenever isSpinning transitions to true
   useEffect(() => {
-    if (isSpinning && targetDemon && allDemons.length > 0 && !isSpinningRef.current) {
+    if (isSpinning && !isSpinningRef.current) {
+      if (!targetDemon || allDemons.length === 0) {
+        onSpinComplete();
+        return;
+      }
+      
       isSpinningRef.current = true;
 
       // 1. Build new reel list ending on targetDemon at targetIndex
@@ -72,51 +92,59 @@ export const CS2Spinner: React.FC<Props> = ({
       const jitter = (Math.random() - 0.5) * 40;
       const finalTranslate = -(targetOffset + jitter);
 
-      const durationMs = isQuickRoll ? 1000 : targetDemon.position <= 150 ? 4500 : 3200;
+      const durationMs = isQuickRoll ? 280 : targetDemon.position <= 150 ? 4500 : 3200;
 
       // Play start sound
       sound.playRollWhoosh();
 
       // Audio ticker interval
-      let ticksCount = 0;
-      const maxTicks = targetIndex;
-      const tickInterval = setInterval(() => {
-        if (ticksCount < maxTicks) {
-          sound.playTickerTick();
-          ticksCount++;
-        } else {
-          clearInterval(tickInterval);
-        }
-      }, durationMs / (maxTicks * 1.2));
+      if (timersRef.current.tick) clearInterval(timersRef.current.tick);
+      if (isQuickRoll) {
+        sound.playTickerTick();
+        setTimeout(() => sound.playTickerTick(), 90);
+        setTimeout(() => sound.playTickerTick(), 180);
+      } else {
+        let ticksCount = 0;
+        const maxTicks = targetIndex;
+        timersRef.current.tick = setInterval(() => {
+          if (ticksCount < maxTicks) {
+            sound.playTickerTick();
+            ticksCount++;
+          } else {
+            if (timersRef.current.tick) clearInterval(timersRef.current.tick);
+          }
+        }, durationMs / (maxTicks * 1.2));
+      }
 
       // 3. Start smooth CSS translation after frame paint
-      const startTimer = setTimeout(() => {
+      if (timersRef.current.start) clearTimeout(timersRef.current.start);
+      timersRef.current.start = setTimeout(() => {
         setActiveTransition(true);
         setTranslateX(finalTranslate);
-      }, 50);
+      }, isQuickRoll ? 20 : 50);
 
       // 4. Complete spin callback
-      const finishTimer = setTimeout(() => {
-        clearInterval(tickInterval);
+      if (timersRef.current.finish) clearTimeout(timersRef.current.finish);
+      timersRef.current.finish = setTimeout(() => {
+        if (timersRef.current.tick) clearInterval(timersRef.current.tick);
         isSpinningRef.current = false;
         onSpinComplete();
-      }, durationMs + 100);
-
-      return () => {
-        clearInterval(tickInterval);
-        clearTimeout(startTimer);
-        clearTimeout(finishTimer);
-      };
+      }, durationMs + (isQuickRoll ? 30 : 100));
     } else if (!isSpinning) {
       isSpinningRef.current = false;
     }
   }, [isSpinning, targetDemon, allDemons, isQuickRoll, onSpinComplete]);
 
-  const spinDurationSec = isQuickRoll ? '1.0s' : targetDemon && targetDemon.position <= 150 ? '4.5s' : '3.2s';
-  const spinTimingFunc =
-    targetDemon && targetDemon.position <= 150
-      ? 'cubic-bezier(0.05, 0.95, 0.1, 1.0)' // Extra slow dramatic deceleration for Top 150
-      : 'cubic-bezier(0.12, 0.85, 0.25, 1.0)';
+  const spinDurationSec = isQuickRoll
+    ? '0.28s'
+    : targetDemon && targetDemon.position <= 150
+    ? '4.5s'
+    : '3.2s';
+  const spinTimingFunc = isQuickRoll
+    ? 'cubic-bezier(0.15, 0.85, 0.35, 1.0)'
+    : targetDemon && targetDemon.position <= 150
+    ? 'cubic-bezier(0.05, 0.95, 0.1, 1.0)' // Extra slow dramatic deceleration for Top 150
+    : 'cubic-bezier(0.12, 0.85, 0.25, 1.0)';
 
   return (
     <div

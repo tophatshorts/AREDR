@@ -234,7 +234,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
 
         {/* STAGE 1: INTRO (0s - 1.6s) */}
         {phase === 'intro' && (
-          <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in zoom-in-90 duration-500">
+          <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in slide-in-from-top-8 duration-1000">
             <div className="relative mb-8">
               <div className="w-28 h-28 rounded-full border-2 border-violet-500/30 flex items-center justify-center">
                 <div className="w-20 h-20 rounded-full border-2 border-violet-400/60 animate-ping" />
@@ -250,15 +250,21 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             <h3 className="text-4xl md:text-5xl font-display font-black text-white tracking-tight uppercase">
               TOP 10 FREQUENCY
             </h3>
-            <p className="mt-3 text-zinc-400 font-mono text-xs tracking-wider">
-              HEARTBEAT FREQUENCY SYNCHRONIZING • BPM 80
-            </p>
+            
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <p className="text-zinc-400 font-mono text-xs tracking-wider animate-in fade-in slide-in-from-top-4 duration-700 delay-300">
+                HEARTBEAT FREQUENCY SYNCHRONIZING • BPM 80
+              </p>
+              <p className="text-violet-500 font-mono text-2xl font-bold tracking-[1em] animate-in fade-in slide-in-from-top-6 duration-1000 delay-500">
+                ...
+              </p>
+            </div>
           </div>
         )}
 
         {/* STAGE 2: BREACH (1.6s - 3.2s) */}
         {phase === 'breach' && (
-          <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in duration-300">
+          <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in slide-in-from-top-8 duration-700">
             <div className="flex items-center gap-3 px-5 py-2 rounded-2xl bg-violet-950/90 border border-violet-400 text-violet-200 font-mono text-xs tracking-widest uppercase mb-6 shadow-[0_0_25px_rgba(168,85,247,0.5)]">
               <Activity className="w-4 h-4 text-rose-400 animate-spin" />
               <span>PIERCING THE TOP 10 RIFT</span>
@@ -272,13 +278,18 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
               SEAL COLLAPSING
             </h2>
 
-            <div className="mt-4 flex items-center gap-4 text-xs font-mono text-zinc-400">
-              <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                PULSE: 175 BPM
-              </span>
-              <span>•</span>
-              <span className="text-violet-300 font-medium">RANK #1 - #10 THRESHOLD</span>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <div className="flex items-center gap-4 text-xs font-mono text-zinc-400">
+                <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                  PULSE: 175 BPM
+                </span>
+                <span>•</span>
+                <span className="text-violet-300 font-medium">RANK #1 - #10 THRESHOLD</span>
+              </div>
+              <p className="text-amber-400 font-mono text-3xl font-bold tracking-[1.5em] animate-in fade-in slide-in-from-top-10 duration-1000 delay-300">
+                ...
+              </p>
             </div>
           </div>
         )}
@@ -290,9 +301,14 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             <h2 className="text-5xl md:text-7xl font-black font-display tracking-tight text-white drop-shadow-[0_0_40px_rgba(255,255,255,0.9)] uppercase animate-pulse">
               CONVERGENCE
             </h2>
-            <p className="mt-4 font-mono text-xs md:text-sm tracking-widest text-violet-300 uppercase">
-              THE MATRIX HAS SHATTERED
-            </p>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <p className="font-mono text-xs md:text-sm tracking-widest text-violet-300 uppercase">
+                THE MATRIX HAS SHATTERED
+              </p>
+              <p className="text-rose-500 font-mono text-4xl font-bold tracking-[1.2em] animate-in fade-in slide-in-from-top-12 duration-1000 delay-200">
+                ...
+              </p>
+            </div>
           </div>
         )}
 

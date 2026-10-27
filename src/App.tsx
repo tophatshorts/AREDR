@@ -40,6 +40,7 @@ import {
   Play,
   Pause,
   LogOut,
+  Save,
 } from 'lucide-react';
 
 import fallbackDemonsRaw from './data/demons.json';
@@ -95,6 +96,7 @@ export default function App() {
   } | null>(null);
 
   const autoRollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRollingRef = useRef<boolean>(false);
 
   // Auth Listener
   useEffect(() => {
@@ -106,16 +108,53 @@ export default function App() {
   }, []);
 
   // Profile Loading
-  useEffect(() => {
-    async function loadProfile() {
-      if (isGuest && !user) {
+  const loadProfile = useCallback(async () => {
+    if (isGuest && !user) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setProfile(JSON.parse(saved));
+      } else {
+        setProfile({
+          id: 'guest-' + Math.random().toString(36).slice(2, 9),
+          username: 'Guest_' + Math.floor(1000 + Math.random() * 9000),
+          createdAt: Date.now(),
+          lastActive: Date.now(),
+          avatarIcon: 'demon',
+          upgrades: DEFAULT_UPGRADES,
+          stats: DEFAULT_STATS,
+          settings: {
+            autoRoll: false,
+            quickRoll: false,
+            autoRollStopRank: null,
+            soundEnabled: true,
+            screenShake: true,
+          },
+        });
+      }
+      return;
+    }
+
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        setProfile(docSnap.data() as PlayerProfile);
+      } else {
         const saved = localStorage.getItem(STORAGE_KEY);
+        let initial: PlayerProfile;
         if (saved) {
-          setProfile(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          initial = { ...parsed, id: user.uid, username: user.displayName || parsed.username || 'Dasher' };
         } else {
-          setProfile({
-            id: 'guest-' + Math.random().toString(36).slice(2, 9),
-            username: 'Guest_' + Math.floor(1000 + Math.random() * 9000),
+          initial = {
+            id: user.uid,
+            username: user.displayName || 'Dasher_' + Math.floor(1000 + Math.random() * 9000),
             createdAt: Date.now(),
             lastActive: Date.now(),
             avatarIcon: 'demon',
@@ -128,58 +167,32 @@ export default function App() {
               soundEnabled: true,
               screenShake: true,
             },
-          });
+          };
         }
-        return;
+        setProfile(initial);
+        await setDoc(docRef, initial);
       }
-
-      if (!user) {
-        setProfile(null);
-        return;
-      }
-
-      try {
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as PlayerProfile);
-        } else {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          let initial: PlayerProfile;
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            initial = { ...parsed, id: user.uid, username: user.displayName || parsed.username || 'Dasher' };
-          } else {
-            initial = {
-              id: user.uid,
-              username: user.displayName || 'Dasher_' + Math.floor(1000 + Math.random() * 9000),
-              createdAt: Date.now(),
-              lastActive: Date.now(),
-              avatarIcon: 'demon',
-              upgrades: DEFAULT_UPGRADES,
-              stats: DEFAULT_STATS,
-              settings: {
-                autoRoll: false,
-                quickRoll: false,
-                autoRollStopRank: null,
-                soundEnabled: true,
-                screenShake: true,
-              },
-            };
-          }
-          setProfile(initial);
-          await setDoc(docRef, initial);
-        }
-      } catch (e) {
-        console.error('Error syncing profile:', e);
-      }
+    } catch (e) {
+      console.error('Error syncing profile:', e);
     }
-
-    loadProfile();
   }, [user, isGuest]);
 
-  // Profile Saving
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Auth Listener and Logout Cleanup
+  async function handleLogout() {
+    try {
+      await signOut(auth);
+      setProfile(null);
+      setIsGuest(false);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+  }
+
+
+  // Profile Saving (Automatic)
   useEffect(() => {
     if (profile) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
@@ -194,14 +207,46 @@ export default function App() {
     }
   }, [profile, user]);
 
-  // Load Demons data
+
+
+  // Load Demons data with live fetch
   useEffect(() => {
     async function loadDemons() {
       setIsLoadingDemons(true);
-      const bundled = (fallbackDemonsRaw as any[]).map((d) => ({
+      
+      let demonList = [...fallbackDemonsRaw] as any[];
+      
+      try {
+        const response = await fetch('https://aredl.pages.dev/api/levels');
+        if (response.ok) {
+          const liveData = await response.json();
+          const liveMap = new Map();
+          liveData.forEach((d: any) => liveMap.set(d.name.toLowerCase(), d));
+          
+          demonList = demonList.map(d => {
+            const live = liveMap.get(d.name.toLowerCase());
+            if (live) {
+              return {
+                ...d,
+                publisher: live.publisher || d.publisher || 'Unknown',
+                verifier: live.verifier || live.publisher || d.verifier || 'Unknown',
+              };
+            }
+            return {
+              ...d,
+              verifier: d.verifier || d.publisher || 'GD Creator'
+            };
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to fetch live demons, using fallback:', e);
+      }
+
+      const bundled = demonList.map((d) => ({
         ...d,
-        baseRarity: calculateDemonRarity(d.position, fallbackDemonsRaw.length),
+        baseRarity: calculateDemonRarity(d.position, demonList.length),
       }));
+      
       setDemons(bundled);
       setIsLoadingDemons(false);
     }
@@ -209,7 +254,7 @@ export default function App() {
   }, []);
 
   // Fetch Daily Hardest
-  const fetchDailyHardest = useCallback(async () => {
+  async function fetchDailyHardest() {
     try {
       const q = query(collection(db, 'leaderboard'), orderBy('demonPosition', 'asc'), limit(1));
       const snap = await getDocs(q);
@@ -222,28 +267,58 @@ export default function App() {
         });
       }
     } catch (e) {}
-  }, []);
+  }
 
   useEffect(() => {
     fetchDailyHardest();
   }, [fetchDailyHardest]);
 
   // Submit to Leaderboard
-  const submitToLeaderboard = async (res: RollResult) => {
+  async function submitToLeaderboard(res?: RollResult) {
     if (!user || !profile) return;
+    
+    // If no specific result provided, use the hardest demon from profile
+    const targetDemon = res ? res.demon : profile.stats.hardestDemon;
+    const targetRarity = res ? res.effectiveRarity : (targetDemon ? targetDemon.baseRarity : 0);
+    const rollsCount = res ? res.rollNumber : profile.stats.totalRolls;
+
+    if (!targetDemon) return;
+
     try {
       await setDoc(doc(db, 'leaderboard', user.uid), {
         userId: user.uid,
         username: profile.username,
-        demonName: res.demon.name,
-        demonPosition: res.demon.position,
-        rarity: res.effectiveRarity,
-        rollsCount: res.rollNumber,
+        demonName: targetDemon.name,
+        demonPosition: targetDemon.position,
+        rarity: targetRarity,
+        rollsCount: rollsCount,
         timestamp: Date.now()
       });
       fetchDailyHardest();
     } catch (e) {}
-  };
+  }
+
+  // Manual Save Trigger
+  async function handleManualSave() {
+    if (!profile) return;
+    
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    
+    // Save to Firestore if logged in
+    if (user) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), profile);
+        if (profile.stats.hardestDemon) {
+          await submitToLeaderboard();
+        }
+      } catch (e) {
+        console.error('Manual save failed:', e);
+        throw e;
+      }
+    }
+  }
+
 
   // Sync mute state
   useEffect(() => {
@@ -251,9 +326,12 @@ export default function App() {
   }, [profile?.settings.soundEnabled]);
 
   // Trigger Roll
-  const handleRoll = useCallback(() => {
-    if (!profile || isSpinning || demons.length === 0) return;
+  function handleRoll() {
+    if (!profile || isSpinning || demons.length === 0 || activeCutscene || isRollingRef.current) return;
 
+    // Prevent overlaps
+    isRollingRef.current = true;
+    
     const nextRollNumber = profile.stats.totalRolls + 1;
     const currentHardestPos = profile.stats.hardestDemon ? profile.stats.hardestDemon.position : null;
 
@@ -267,15 +345,20 @@ export default function App() {
 
     setPendingRollResult(result);
     setIsSpinning(true);
-  }, [isSpinning, demons, profile]);
+  }
 
   // Complete Spin
-  const handleSpinComplete = useCallback(() => {
-    if (!pendingRollResult || !profile) return;
+  function handleSpinComplete() {
+    isRollingRef.current = false;
+    setIsSpinning(false);
+    
+    if (!pendingRollResult || !profile) {
+      setPendingRollResult(null);
+      return;
+    }
 
     const result = pendingRollResult;
     setCurrentResult(result);
-    setIsSpinning(false);
     setPendingRollResult(null);
 
     if (result.tier === 'top1' || result.tier === 'top10' || result.tier === 'top150') {
@@ -287,7 +370,11 @@ export default function App() {
     }
 
     if (result.isNewPersonalBest) {
+      // Force immediate submission to cloud if PB
       submitToLeaderboard(result);
+    } else if (result.rollNumber % 100 === 0) {
+      // Periodic submission even without PB to update rolls count
+      submitToLeaderboard();
     }
 
     setProfile((prev) => {
@@ -337,26 +424,42 @@ export default function App() {
         },
       };
     });
-  }, [pendingRollResult, profile, user]);
+  }
 
-  // Auto Roll
+  // Auto Roll: Fast, responsive loop when both Auto Roll and Quick Roll are active
   useEffect(() => {
-    if (!profile || !profile.settings.autoRoll || !profile.upgrades.hasAutoRoll) {
-      if (autoRollTimerRef.current) clearInterval(autoRollTimerRef.current);
+    if (!profile?.settings.autoRoll || !profile?.upgrades.hasAutoRoll) {
+      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
       return;
     }
 
-    const delayMs = profile.settings.quickRoll ? 1200 : 3800;
-    autoRollTimerRef.current = setInterval(() => {
-      if (!isSpinning && !activeCutscene && !showUpgrades && !showStats && !showProfile && !showLeaderboard) {
-        handleRoll();
-      }
+    // Stop rolling if any blocker is active
+    if (isSpinning || pendingRollResult || activeCutscene || showUpgrades || showStats || showProfile || showLeaderboard) {
+      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
+      return;
+    }
+
+    const delayMs = profile.settings.quickRoll ? 100 : 600; // Slightly faster for responsiveness
+    autoRollTimerRef.current = setTimeout(() => {
+      handleRoll();
     }, delayMs);
 
     return () => {
-      if (autoRollTimerRef.current) clearInterval(autoRollTimerRef.current);
+      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
     };
-  }, [profile?.settings.autoRoll, profile?.settings.quickRoll, profile?.upgrades.hasAutoRoll, isSpinning, activeCutscene, showUpgrades, showStats, showProfile, showLeaderboard, handleRoll]);
+  }, [
+    profile?.settings.autoRoll,
+    profile?.settings.quickRoll,
+    profile?.upgrades.hasAutoRoll,
+    isSpinning,
+    pendingRollResult,
+    activeCutscene,
+    showUpgrades,
+    showStats,
+    showProfile,
+    showLeaderboard,
+    handleRoll,
+  ]);
 
   if (isAuthLoading) {
     return (
@@ -398,7 +501,7 @@ export default function App() {
           {/* Logo & Title Lockup */}
           <div className="flex items-center gap-3.5">
             <img
-              src="./assets/aistudio/IMG_7950_e702d8b3.png"
+              src="assets/aistudio/IMG_7950_e702d8b3.png"
               alt="AREDR"
               className="h-8 sm:h-9 w-auto object-contain drop-shadow-[0_2px_12px_rgba(245,158,11,0.35)]"
             />
@@ -417,7 +520,7 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Demon Keys Currency Chip */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 font-mono font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-              <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
+              <img src="assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
               <span>{formatNumber(profile.stats.currentKeys)}</span>
             </div>
 
@@ -451,7 +554,14 @@ export default function App() {
               <UserIcon className="w-4 h-4" />
             </button>
             <button
-              onClick={() => { signOut(auth); setIsGuest(false); }}
+              onClick={handleManualSave}
+              title="Manual Save"
+              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-500/40 text-emerald-400 hover:text-emerald-300 transition-all duration-200 shadow-sm"
+            >
+              <Save className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleLogout}
               title="Sign Out"
               className="p-2 rounded-xl bg-zinc-900/80 hover:bg-rose-500/15 border border-white/10 hover:border-rose-500/40 text-zinc-400 hover:text-rose-300 transition-all duration-200"
             >
@@ -546,7 +656,7 @@ export default function App() {
 
                     {/* Demon Keys Reward Pill */}
                     <div className="mt-5 flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-400/40 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_20px_rgba(6,182,212,0.25)]">
-                      <img src="/assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
+                      <img src="assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
                       <span>+{currentResult.keysEarned} Demon Keys</span>
                     </div>
                   </div>
@@ -560,7 +670,7 @@ export default function App() {
                       <div className="relative mb-6">
                         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-cyan-500/20 rounded-full blur-2xl" />
                         <img
-                          src="/assets/aistudio/IMG_7950_e702d8b3.png"
+                          src="assets/aistudio/IMG_7950_e702d8b3.png"
                           alt="AREDR"
                           className="relative h-16 w-auto object-contain drop-shadow-[0_8px_25px_rgba(245,158,11,0.4)]"
                         />
@@ -729,7 +839,33 @@ export default function App() {
       {showUpgrades && <UpgradesModal upgrades={profile.upgrades} stats={profile.stats} onClose={() => setShowUpgrades(false)} onUpgradeLuck={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, luckLevel: p!.upgrades.luckLevel + 1 } }))} onUpgradeKeysMult={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, keysMultiplierLevel: p!.upgrades.keysMultiplierLevel + 1 } }))} onUpgradePity={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, pityTierLevel: p!.upgrades.pityTierLevel + 1 } }))} onUpgradeStreak={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, streakChargeLevel: p!.upgrades.streakChargeLevel + 1 } }))} onBuyQuickRoll={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, hasQuickRoll: true }, settings: { ...p!.settings, quickRoll: true } }))} onBuyAutoRoll={(cost) => setProfile(p => ({ ...p!, stats: { ...p!.stats, currentKeys: p!.stats.currentKeys - cost }, upgrades: { ...p!.upgrades, hasAutoRoll: true }, settings: { ...p!.settings, autoRoll: true } }))} />}
       {showStats && <StatTrackerModal stats={profile.stats} allDemons={demons} dailyHardest={dailyHardest} onClose={() => setShowStats(false)} onReplayCutscene={(demon) => setActiveCutscene({ demon, effectiveRarity: demon.baseRarity, rollNumber: profile.stats.totalRolls, timestamp: Date.now(), keysEarned: 0, isNewPersonalBest: false, tier: 'top150' })} />}
       {showLeaderboard && <LeaderboardModal onClose={() => setShowLeaderboard(false)} />}
-      {showProfile && <SaveProfileModal profile={profile} onUpdateProfileName={(n) => setProfile(p => ({ ...p!, username: n }))} onResetSave={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <SaveProfileModal 
+          profile={profile} 
+          user={user}
+          onUpdateProfileName={(n) => {
+            setProfile(p => ({ ...p!, username: n }));
+            // Trigger leaderboard update if they have a hardest demon
+            if (profile.stats.hardestDemon) {
+              submitToLeaderboard();
+            }
+          }} 
+          onManualSave={handleManualSave}
+          onResetSave={async () => {
+            if (user) {
+              try {
+                // Delete cloud data
+                const { deleteDoc } = await import('firebase/firestore');
+                await deleteDoc(doc(db, 'users', user.uid));
+                await deleteDoc(doc(db, 'leaderboard', user.uid));
+              } catch (e) {}
+            }
+            localStorage.removeItem(STORAGE_KEY);
+            window.location.reload();
+          }} 
+          onClose={() => setShowProfile(false)} 
+        />
+      )}
     </div>
   );
 }

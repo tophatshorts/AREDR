@@ -19,8 +19,8 @@ service cloud.firestore {
 
     // User Profile Validation
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'username', 'stats', 'upgrades', 'settings']) &&
-             data.uid == request.auth.uid &&
+      return data.keys().hasAll(['id', 'username', 'stats', 'upgrades', 'settings']) &&
+             data.id == request.auth.uid &&
              data.username is string && data.username.size() >= 3 && data.username.size() <= 32;
     }
 
@@ -39,10 +39,10 @@ service cloud.firestore {
     }
 
     match /leaderboard/{entryId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidId(entryId) && isValidLeaderboardEntry(request.resource.data);
       allow update: if isOwner(resource.data.userId) && isValidLeaderboardEntry(request.resource.data);
-      allow delete: if false; // Ranks are permanent until overwritten by owner
+      allow delete: if isOwner(resource.data.userId);
     }
   }
 }

@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
+import { User as FirebaseUser } from 'firebase/auth';
 import { PlayerProfile } from '../game/types';
-import { X, User, Save, Check, RotateCcw, Cloud, ShieldCheck } from 'lucide-react';
+import { X, User, Save, Check, RotateCcw, Cloud, ShieldCheck, Trash2 } from 'lucide-react';
 
 interface Props {
   profile: PlayerProfile;
+  user: FirebaseUser | null;
   onUpdateProfileName: (newName: string) => void;
+  onManualSave: () => Promise<void>;
   onResetSave: () => void;
   onClose: () => void;
 }
 
 export const SaveProfileModal: React.FC<Props> = ({
   profile,
+  user,
   onUpdateProfileName,
+  onManualSave,
   onResetSave,
   onClose,
 }) => {
   const [usernameInput, setUsernameInput] = useState(profile.username);
   const [nameSaved, setNameSaved] = useState(false);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualSaved, setManualSaved] = useState(false);
 
   const handleSaveName = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +31,19 @@ export const SaveProfileModal: React.FC<Props> = ({
       onUpdateProfileName(usernameInput.trim());
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 2000);
+    }
+  };
+
+  const handleManualSave = async () => {
+    setManualSaving(true);
+    try {
+      await onManualSave();
+      setManualSaved(true);
+      setTimeout(() => setManualSaved(false), 2500);
+    } catch (e) {
+      alert('Failed to save. Please check your internet connection.');
+    } finally {
+      setManualSaving(false);
     }
   };
 
@@ -81,45 +101,89 @@ export const SaveProfileModal: React.FC<Props> = ({
         <div className="mt-6 pt-5 border-t border-white/[0.08] space-y-3">
           <div className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-sans flex items-center justify-between">
             <span>Cloud Synchronization</span>
-            <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Active
+            <span className={`flex items-center gap-1.5 text-[11px] font-medium ${user ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              <span className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+              {user ? 'Active' : 'Guest Mode'}
             </span>
           </div>
 
           <div className="p-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex items-start gap-3.5">
-            <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5">
+            <div className={`p-2 rounded-xl border shrink-0 mt-0.5 ${user ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-zinc-800 border-white/5 text-zinc-500'}`}>
               <Cloud className="w-5 h-5" />
             </div>
             <div className="text-xs text-zinc-300 leading-relaxed font-sans">
               <p className="font-semibold text-white mb-1 flex items-center gap-1.5">
-                <span>Real-Time Cloud Storage</span>
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{user ? 'Real-Time Cloud Storage' : 'Local Storage Only'}</span>
+                {user && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
               </p>
-              Your rolls, keys, upgrades, and hardest demon are securely saved to your account in real-time. Manual JSON files are no longer needed.
+              {user 
+                ? 'Your rolls, keys, upgrades, and hardest demon are securely saved to your account in real-time. Manual JSON files are no longer needed.'
+                : 'You are playing as a guest. Your progress is saved in this browser but will be lost if you clear your data or switch devices.'}
             </div>
           </div>
+
+          <button
+            onClick={handleManualSave}
+            disabled={manualSaving}
+            className={`w-full py-3 rounded-2xl flex items-center justify-center gap-2.5 font-display font-bold text-sm uppercase tracking-wider transition-all duration-200 transform active:scale-95 border ${
+              manualSaved 
+                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' 
+                : 'bg-zinc-900 hover:bg-zinc-800 border-white/10 text-white shadow-lg'
+            }`}
+          >
+            {manualSaving ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : manualSaved ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Progress Saved!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Save Progress Now</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Reset Warning */}
-        <div className="mt-6 pt-4 border-t border-white/[0.08] flex justify-between items-center">
-          <span className="text-xs text-zinc-500 font-mono">
-            ID: {profile.id.slice(0, 8)}...
-          </span>
-          <button
-            onClick={() => {
-              if (window.confirm('Are you sure you want to reset your RNG progress? All keys and discovered demons will be wiped.')) {
-                onResetSave();
-                onClose();
-              }
-            }}
-            className="flex items-center gap-1.5 text-xs text-rose-400/80 hover:text-rose-300 transition"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Progress</span>
-          </button>
+        <div className="mt-6 pt-4 border-t border-white/[0.08] flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-zinc-500 font-mono">
+              {user ? `UID: ${user.uid.slice(0, 8)}...` : `Guest ID: ${profile.id.slice(0, 8)}...`}
+            </span>
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to reset your RNG progress? All keys and discovered demons will be wiped.')) {
+                  onResetSave();
+                  onClose();
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-400 transition font-medium"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Local Save</span>
+            </button>
+          </div>
+
+          {user && (
+            <button
+              onClick={() => {
+                if (window.confirm('CRITICAL: This will PERMANENTLY delete your cloud progress AND leaderboard rank. This cannot be undone. Proceed?')) {
+                  onResetSave();
+                  onClose();
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition text-xs font-bold uppercase tracking-wider"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Cloud Account & Data</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 };
+

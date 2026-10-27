@@ -117,7 +117,7 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
           <div className="relative mb-6 animate-in zoom-in-95 duration-700">
             <div className="absolute -inset-4 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-cyan-500/20 rounded-full blur-2xl opacity-75" />
             <img
-              src="./assets/aistudio/IMG_7950_e702d8b3.png"
+              src="assets/aistudio/IMG_7950_e702d8b3.png"
               alt="AREDR Logo"
               className="relative h-16 sm:h-20 w-auto object-contain drop-shadow-[0_8px_30px_rgba(245,158,11,0.35)]"
             />
@@ -206,7 +206,7 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
         <div className="bg-zinc-950/85 border border-white/10 rounded-3xl p-7 sm:p-8 shadow-2xl backdrop-blur-2xl">
           <div className="flex flex-col items-center text-center mb-6">
             <img
-              src="./assets/aistudio/IMG_7950_e702d8b3.png"
+              src="assets/aistudio/IMG_7950_e702d8b3.png"
               alt="AREDR"
               className="h-10 w-auto object-contain mb-3 drop-shadow"
             />
