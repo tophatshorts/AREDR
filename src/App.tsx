@@ -159,6 +159,7 @@ export default function App() {
   const [showStats, setShowStats] = useState<boolean>(false);
   const [showProfile, setShowProfile] = useState<boolean>(false);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
+  const [showAutosaveNotice, setShowAutosaveNotice] = useState<boolean>(false);
 
   const [dailyHardest, setDailyHardest] = useState<{
     username: string;
@@ -185,9 +186,9 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Save Profile Helper (Updates localStorage & Firestore cleanly)
+  // Save Profile Helper (Updates localStorage continuously; Cloud sync on manual action only)
   const saveProfileToStorage = useCallback(
-    async (targetProfile: PlayerProfile, syncCloudNow: boolean = true) => {
+    async (targetProfile: PlayerProfile, syncCloudNow: boolean = false) => {
       if (!targetProfile) return;
 
       const sanitized = normalizeProfile(targetProfile);
@@ -206,7 +207,7 @@ export default function App() {
         }, 1500);
       }, 200);
 
-      // 3. Cloud Sync if user is signed in
+      // 3. Cloud Sync if user is signed in AND explicit manual save requested
       if (user && syncCloudNow) {
         try {
           await setDoc(doc(db, 'users', user.uid), sanitized);
@@ -218,7 +219,7 @@ export default function App() {
     [user]
   );
 
-  // Profile Loading Logic (Preserves higher local progress over old cloud snapshots)
+  // Profile Loading Logic
   const loadProfile = useCallback(async () => {
     const savedLocalStr = localStorage.getItem(STORAGE_KEY);
     let localProfile: PlayerProfile | null = null;
@@ -230,19 +231,19 @@ export default function App() {
       }
     }
 
-    if (isGuest && !user) {
-      const activeProfile = localProfile || normalizeProfile({ username: 'Guest_' + Math.floor(1000 + Math.random() * 9000) });
-      setProfile(activeProfile);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(activeProfile));
-      return;
-    }
-
-    if (!user) {
-      setProfile(null);
-      return;
-    }
-
     try {
+      if (isGuest && !user) {
+        const activeProfile = localProfile || normalizeProfile({ username: 'Guest_' + Math.floor(1000 + Math.random() * 9000) });
+        setProfile(activeProfile);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(activeProfile));
+        return;
+      }
+
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
       const docRef = doc(db, 'users', user.uid);
       const docPromise = getDoc(docRef);
       const timeoutPromise = new Promise<never>((_, reject) =>
@@ -268,7 +269,6 @@ export default function App() {
               id: user.uid,
               username: user.displayName || localProfile.username,
             });
-            setDoc(docRef, finalProfile).catch((e) => console.warn('Cloud merge setDoc failed:', e));
           }
         }
 
@@ -284,13 +284,14 @@ export default function App() {
         );
         setProfile(initial);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        setDoc(docRef, initial).catch((e) => console.warn('Initial cloud setDoc failed:', e));
       }
     } catch (e) {
       console.warn('Profile cloud sync bypassed (quota limit / timeout / offline):', e);
-      const fallback = localProfile || normalizeProfile({ id: user.uid, username: sanitizeUsername(user.displayName) });
+      const fallback = localProfile || normalizeProfile({ id: user ? user.uid : 'guest-1', username: sanitizeUsername(user?.displayName) });
       setProfile(fallback);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
+    } finally {
+      setShowAutosaveNotice(true);
     }
   }, [user, isGuest]);
 
@@ -298,7 +299,7 @@ export default function App() {
     loadProfile();
   }, [loadProfile]);
 
-  // Periodic Background Persistence (Every 3s while active)
+  // Periodic Local Storage Persistence (Every 3s while active - No cloud quota hits)
   useEffect(() => {
     if (!profile) return;
 
@@ -310,14 +311,11 @@ export default function App() {
           username: sanitizeUsername(current.username),
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
-        if (user) {
-          setDoc(doc(db, 'users', user.uid), sanitized).catch(() => {});
-        }
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [user, profile?.id]);
+  }, [profile?.id]);
 
   // Auth Listener and Logout Cleanup
   async function handleLogout() {
@@ -552,9 +550,9 @@ export default function App() {
     };
 
     setProfile(nextProfile);
-    saveProfileToStorage(nextProfile, isPB || result.rollNumber % 50 === 0);
+    saveProfileToStorage(nextProfile, false);
 
-    if (isPB || result.rollNumber % 50 === 0) {
+    if (isPB) {
       submitToLeaderboard(result);
     }
   }
@@ -1037,7 +1035,7 @@ export default function App() {
               upgrades: { ...current.upgrades, luckLevel: current.upgrades.luckLevel + 1 },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onUpgradeKeysMult={(cost) => {
             const current = profileRef.current;
@@ -1048,7 +1046,7 @@ export default function App() {
               upgrades: { ...current.upgrades, keysMultiplierLevel: current.upgrades.keysMultiplierLevel + 1 },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onUpgradePity={(cost) => {
             const current = profileRef.current;
@@ -1059,7 +1057,7 @@ export default function App() {
               upgrades: { ...current.upgrades, pityTierLevel: current.upgrades.pityTierLevel + 1 },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onUpgradeStreak={(cost) => {
             const current = profileRef.current;
@@ -1070,7 +1068,7 @@ export default function App() {
               upgrades: { ...current.upgrades, streakChargeLevel: current.upgrades.streakChargeLevel + 1 },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onBuyQuickRoll={(cost) => {
             const current = profileRef.current;
@@ -1082,7 +1080,7 @@ export default function App() {
               settings: { ...current.settings, quickRoll: true },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onUpgradeQuickRollSpeed={(cost) => {
             const current = profileRef.current;
@@ -1096,7 +1094,7 @@ export default function App() {
               },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
           onBuyAutoRoll={(cost) => {
             const current = profileRef.current;
@@ -1108,7 +1106,7 @@ export default function App() {
               settings: { ...current.settings, autoRoll: true },
             };
             setProfile(updated);
-            saveProfileToStorage(updated, true);
+            saveProfileToStorage(updated, false);
           }}
         />
       )}

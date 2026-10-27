@@ -113,11 +113,11 @@ export const SaveProfileModal: React.FC<Props> = ({
             </div>
             <div className="text-xs text-zinc-300 leading-relaxed font-sans">
               <p className="font-semibold text-white mb-1 flex items-center gap-1.5">
-                <span>{user ? 'Real-Time Cloud Storage' : 'Local Storage Only'}</span>
+                <span>{user ? 'Cloud Sync (Manual)' : 'Local Storage Only'}</span>
                 {user && <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
               </p>
               {user 
-                ? 'Your rolls, keys, upgrades, and hardest demon are securely saved to your account in real-time. Manual JSON files are no longer needed.'
+                ? 'Your rolls, keys, and upgrades save continuously to local storage. Click "Save Progress Now" below to save your latest state to the cloud.'
                 : 'You are playing as a guest. Your progress is saved in this browser but will be lost if you clear your data or switch devices.'}
             </div>
           </div>
