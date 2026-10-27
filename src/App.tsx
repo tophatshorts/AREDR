@@ -244,7 +244,12 @@ export default function App() {
 
     try {
       const docRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(docRef);
+      const docPromise = getDoc(docRef);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore load timeout')), 2500)
+      );
+
+      const docSnap = await Promise.race([docPromise, timeoutPromise]);
 
       if (docSnap.exists()) {
         const cloudProfile = normalizeProfile(docSnap.data());
@@ -263,7 +268,7 @@ export default function App() {
               id: user.uid,
               username: user.displayName || localProfile.username,
             });
-            await setDoc(docRef, finalProfile).catch((e) => console.warn('Cloud merge setDoc failed:', e));
+            setDoc(docRef, finalProfile).catch((e) => console.warn('Cloud merge setDoc failed:', e));
           }
         }
 
@@ -279,12 +284,13 @@ export default function App() {
         );
         setProfile(initial);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        await setDoc(docRef, initial).catch((e) => console.warn('Initial cloud setDoc failed:', e));
+        setDoc(docRef, initial).catch((e) => console.warn('Initial cloud setDoc failed:', e));
       }
     } catch (e) {
-      console.error('Error syncing profile:', e);
-      const fallback = localProfile || normalizeProfile({ id: user.uid, username: user.displayName });
+      console.warn('Profile cloud sync bypassed (quota limit / timeout / offline):', e);
+      const fallback = localProfile || normalizeProfile({ id: user.uid, username: sanitizeUsername(user.displayName) });
       setProfile(fallback);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
     }
   }, [user, isGuest]);
 

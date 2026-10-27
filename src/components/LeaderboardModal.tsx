@@ -22,14 +22,21 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
       limit(100)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: LeaderboardEntry[] = [];
-      snapshot.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
-      });
-      setEntries(list);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: LeaderboardEntry[] = [];
+        snapshot.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+        });
+        setEntries(list);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn('Leaderboard onSnapshot error / quota exceeded:', error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
