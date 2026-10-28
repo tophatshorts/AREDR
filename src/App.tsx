@@ -173,11 +173,16 @@ export default function App() {
   const isRollingRef = useRef<boolean>(false);
   const profileRef = useRef<PlayerProfile | null>(profile);
   const saveStatusTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const handleRollRef = useRef<() => void>(() => {});
 
-  // Keep profileRef in sync with latest profile state
+  // Keep profileRef and handleRollRef in sync
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
+
+  useEffect(() => {
+    handleRollRef.current = handleRoll;
+  });
 
   // Auth Listener
   useEffect(() => {
@@ -660,7 +665,7 @@ export default function App() {
     const delayMs = profile.settings.quickRoll ? speedTier.autoDelayMs : 1200;
 
     autoRollTimerRef.current = setTimeout(() => {
-      handleRoll();
+      handleRollRef.current();
     }, delayMs);
 
     return () => {
@@ -675,7 +680,6 @@ export default function App() {
     pendingRollResult,
     activeCutscene,
     showLogoutConfirm,
-    handleRoll,
   ]);
 
   if (isAuthLoading) {
