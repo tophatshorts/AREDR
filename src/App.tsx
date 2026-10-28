@@ -181,10 +181,27 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    let unsubscribe = () => {};
+    try {
+      if (auth && typeof auth === 'object' && 'name' in auth) {
+        unsubscribe = onAuthStateChanged(
+          auth,
+          (firebaseUser) => {
+            setUser(firebaseUser);
+            setIsAuthLoading(false);
+          },
+          (err) => {
+            console.warn('Auth listener error:', err);
+            setIsAuthLoading(false);
+          }
+        );
+      } else {
+        setIsAuthLoading(false);
+      }
+    } catch (e) {
+      console.warn('Firebase Auth failed to attach:', e);
       setIsAuthLoading(false);
-    });
+    }
     return () => unsubscribe();
   }, []);
 
@@ -656,7 +673,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <img
-              src="assets/aistudio/IMG_7950_e702d8b3.png"
+              src="./assets/aistudio/IMG_7950_e702d8b3.png"
               alt="AREDR"
               className="h-8 sm:h-9 w-auto object-contain drop-shadow-[0_2px_12px_rgba(245,158,11,0.35)]"
             />
@@ -673,7 +690,7 @@ export default function App() {
 
           <div className="flex items-center gap-2 sm:gap-2.5">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 font-mono font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-              <img src="assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
+              <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
               <span>{formatNumber(profile.stats.currentKeys)}</span>
             </div>
 
@@ -810,7 +827,7 @@ export default function App() {
                     </p>
 
                     <div className="mt-5 flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-400/40 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_20px_rgba(6,182,212,0.25)]">
-                      <img src="assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
+                      <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
                       <span>+{currentResult.keysEarned} Demon Keys</span>
                     </div>
                   </div>
@@ -822,7 +839,7 @@ export default function App() {
                       <div className="relative mb-6">
                         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-cyan-500/20 rounded-full blur-2xl" />
                         <img
-                          src="assets/aistudio/IMG_7950_e702d8b3.png"
+                          src="./assets/aistudio/IMG_7950_e702d8b3.png"
                           alt="AREDR"
                           className="relative h-16 w-auto object-contain drop-shadow-[0_8px_25px_rgba(245,158,11,0.4)]"
                         />

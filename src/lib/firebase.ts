@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import defaultConfig from '../../firebase-applet-config.json';
 
-const rawConfig = (defaultConfig && typeof defaultConfig === 'object') ? defaultConfig : {} as Record<string, string>;
+const rawConfig = (defaultConfig && typeof defaultConfig === 'object') ? (defaultConfig as Record<string, string>) : {};
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || rawConfig.apiKey || '',
@@ -24,12 +24,15 @@ let authInstance: Auth;
 try {
   if (isFirebaseConfigured) {
     app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-    dbInstance = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(app);
+    try {
+      dbInstance = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+        ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+        : getFirestore(app);
+    } catch (e) {
+      dbInstance = getFirestore(app);
+    }
     authInstance = getAuth(app);
   } else {
-    // Safe fallback if Firebase config is omitted or erased
     app = getApps().length > 0 ? getApps()[0] : initializeApp({
       apiKey: 'demo-api-key',
       projectId: 'demo-gd-rng',
@@ -40,8 +43,11 @@ try {
   }
 } catch (err) {
   console.warn('Firebase init fallback warning:', err);
-  // Ensure non-null exports
-  app = getApps().length > 0 ? getApps()[0] : ({} as FirebaseApp);
+  app = getApps().length > 0 ? getApps()[0] : initializeApp({
+    apiKey: 'demo-api-key',
+    projectId: 'demo-gd-rng',
+    appId: 'demo-app-id',
+  });
   try {
     dbInstance = getFirestore(app);
   } catch {
