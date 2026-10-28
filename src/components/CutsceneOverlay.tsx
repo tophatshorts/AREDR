@@ -135,7 +135,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             window.setTriggerScreenShake(true);
           }}
         >
-          <source src="/assets/videos/ScreenRecording_10-28-2026_10-31-39_1_249fa07e.mov" />
+          <source src="/assets/videos/grief_cutscene.mp4" />
         </video>
       </div>
     );
