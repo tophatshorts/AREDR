@@ -650,7 +650,7 @@ export default function App() {
       return;
     }
 
-    if (isSpinning || pendingRollResult || activeCutscene || showUpgrades || showStats || showProfile || showLeaderboard || showLogoutConfirm) {
+    if (isSpinning || pendingRollResult || activeCutscene || showLogoutConfirm) {
       if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
       return;
     }
@@ -674,10 +674,6 @@ export default function App() {
     isSpinning,
     pendingRollResult,
     activeCutscene,
-    showUpgrades,
-    showStats,
-    showProfile,
-    showLeaderboard,
     showLogoutConfirm,
     handleRoll,
   ]);
