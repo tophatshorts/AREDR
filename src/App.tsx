@@ -152,6 +152,7 @@ export default function App() {
 
   // Save Indicator & Confirmation States
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [lastSavedCloud, setLastSavedCloud] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
   // Modals
@@ -160,6 +161,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState<boolean>(false);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showAutosaveNotice, setShowAutosaveNotice] = useState<boolean>(false);
+  const [dismissNoticeChecked, setDismissNoticeChecked] = useState<boolean>(false);
 
   const [dailyHardest, setDailyHardest] = useState<{
     username: string;
@@ -198,13 +200,14 @@ export default function App() {
 
       // 2. Visual Save Status Feedback
       setSaveStatus('saving');
+      setLastSavedCloud(syncCloudNow);
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
 
       saveStatusTimerRef.current = setTimeout(() => {
         setSaveStatus('saved');
         saveStatusTimerRef.current = setTimeout(() => {
           setSaveStatus('idle');
-        }, 1500);
+        }, 1800);
       }, 200);
 
       // 3. Cloud Sync if user is signed in AND explicit manual save requested
@@ -291,7 +294,9 @@ export default function App() {
       setProfile(fallback);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback));
     } finally {
-      setShowAutosaveNotice(true);
+      if (localStorage.getItem('AREDL_RNG_DISMISS_AUTOSAVE_NOTICE') !== 'true') {
+        setShowAutosaveNotice(true);
+      }
     }
   }, [user, isGuest]);
 
@@ -993,19 +998,19 @@ export default function App() {
         {saveStatus === 'saving' && (
           <>
             <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-            <span className="text-amber-300">Autosaving...</span>
+            <span className="text-amber-300">{lastSavedCloud ? 'Saving to Cloud...' : 'Saving Locally...'}</span>
           </>
         )}
         {saveStatus === 'saved' && (
           <>
             <Check className="w-3.5 h-3.5 text-emerald-400 animate-in zoom-in-50 duration-200" />
-            <span className="text-emerald-300">{user ? 'Saved to Cloud' : 'Saved Locally'}</span>
+            <span className="text-emerald-300">{lastSavedCloud ? 'Saved to Cloud!' : 'Saved Locally'}</span>
           </>
         )}
         {saveStatus === 'idle' && (
           <>
             <Cloud className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-zinc-400">{user ? 'Cloud Synced' : 'Local Save Active'}</span>
+            <span className="text-zinc-400">Local Save Active</span>
           </>
         )}
       </div>
@@ -1161,6 +1166,42 @@ export default function App() {
           }}
           onClose={() => setShowProfile(false)}
         />
+      )}
+
+      {showAutosaveNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto border border-amber-500/20">
+              <Sparkles className="w-6 h-6 text-amber-400" />
+            </div>
+            <h3 className="font-display font-bold text-xl text-white">Save Progress Notice</h3>
+            <p className="text-sm text-zinc-300 font-sans leading-relaxed">
+              uh so guys i removed autosave cuz im broke and autosave hits quota limits quick. PLEASE MANUAL SAVE AFTER YOU HIT A BIG MILESTONE OR BEFORE QUITTING.
+            </p>
+            <div className="flex items-center justify-center pt-2">
+              <label className="flex items-center gap-2 text-xs text-zinc-300 font-sans cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dismissNoticeChecked}
+                  onChange={(e) => setDismissNoticeChecked(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 accent-amber-500 cursor-pointer"
+                />
+                <span>Dismiss this prompt everytime?</span>
+              </label>
+            </div>
+            <button
+              onClick={() => {
+                if (dismissNoticeChecked) {
+                  localStorage.setItem('AREDL_RNG_DISMISS_AUTOSAVE_NOTICE', 'true');
+                }
+                setShowAutosaveNotice(false);
+              }}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-950 font-display font-bold rounded-xl transition-all shadow-lg active:scale-95"
+            >
+              I Understand
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
