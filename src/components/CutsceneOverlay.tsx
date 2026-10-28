@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { DemonLevel } from '../game/types';
 import { sound } from '../game/sound';
@@ -20,6 +20,8 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
   const [pulseCount, setPulseCount] = useState<number>(0);
   const pos = demon.position;
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   useEffect(() => {
     // Keyboard listener for Space/Escape to skip
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -31,20 +33,18 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     window.addEventListener('keydown', handleKeyDown);
 
     if (pos === 1) {
-      // Top 1 GRIEF Sequence
       sound.playGriefCinematic();
-      const t1 = setTimeout(() => setPhase('breach'), 1000);
-      const t2 = setTimeout(() => {
-        setPhase('climax');
-      }, 2400);
-
+      if (videoRef.current) {
+        videoRef.current.muted = true;
+        videoRef.current.play().catch((err) => {
+          console.warn("Mobile autoplay prevented:", err);
+          onClose();
+        });
+      }
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        clearTimeout(t1);
-        clearTimeout(t2);
       };
     } else if (pos <= 10) {
-      // Top 10 Cinematic: Expanded multi-stage suspense (~4.8 seconds)
       sound.playTop10Cinematic();
       
       const pInterval = setInterval(() => {
@@ -65,7 +65,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
         clearTimeout(t3);
       };
     } else {
-      // Top 150 Main List
       sound.playTop150Slam();
       const t1 = setTimeout(() => setPhase('climax'), 300);
 
@@ -110,39 +109,51 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     }
   };
 
-  // 1. TOP 1 GRIEF CUTSCENE
+  // 1. TOP 1 GRIEF CUTSCENE (MOBILE FIXED)
   if (pos === 1) {
     return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none"
-        onClick={() => {
-          onClose();
-          sound.playSFX('shatter'); // Example cool SFX
-          // @ts-ignore
-          window.setTriggerScreenShake(true);
-        }}
-      >
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            sound.playSFX('shatter');
+            onClose();
+          }}
+          className="absolute top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold tracking-wide border border-white/10 shadow-lg cursor-pointer"
+        >
+          <span>Skip</span>
+          <X className="w-3.5 h-3.5" />
+        </button>
+
         <video
-          autoPlay
+          ref={videoRef}
           muted
           playsInline
+          // @ts-ignore
+          webkit-playsinline="true"
           preload="auto"
           className="w-full h-full object-cover"
-          onError={(e) => console.error("Video error:", e.currentTarget.error)}
-          onEnded={() => {
+          onError={(e) => {
+            console.error("Video failed to load:", e.currentTarget.error);
             onClose();
+          }}
+          onEnded={() => {
             sound.playSFX('shatter');
             // @ts-ignore
-            window.setTriggerScreenShake(true);
+            if (typeof window.setTriggerScreenShake === 'function') {
+              // @ts-ignore
+              window.setTriggerScreenShake(true);
+            }
+            onClose();
           }}
         >
-          <source src="/assets/videos/grief_cutscene.mp4" type="video/mp4" />
+          <source src={`${import.meta.env.BASE_URL || ''}assets/videos/grief_cutscene.mp4`} type="video/mp4" />
         </video>
       </div>
     );
   }
 
-  // 2. TOP 10 CINEMATIC CUTSCENE (EXPANDED TO ~4.8s SUSPENSE)
+  // 2. TOP 10 CINEMATIC CUTSCENE
   if (pos <= 10) {
     return (
       <div
@@ -160,13 +171,9 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           <X className="w-3.5 h-3.5" />
         </button>
 
-        {/* Ambient Cosmic Vortex */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22)_0%,rgba(15,23,42,0.6)_45%,rgba(0,0,0,0.98)_80%)] pointer-events-none" />
-
-        {/* Dynamic Scanlines & Particle Glow */}
         <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#8b5cf6_1px,transparent_1px)] [background-size:24px_24px]" />
 
-        {/* STAGE 1: INTRO (0s - 1.6s) */}
         {phase === 'intro' && (
           <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in slide-in-from-top-8 duration-1000">
             <div className="relative mb-8">
@@ -196,7 +203,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           </div>
         )}
 
-        {/* STAGE 2: BREACH (1.6s - 3.2s) */}
         {phase === 'breach' && (
           <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in slide-in-from-top-8 duration-700">
             <div className="flex items-center gap-3 px-5 py-2 rounded-2xl bg-violet-950/90 border border-violet-400 text-violet-200 font-mono text-xs tracking-widest uppercase mb-6 shadow-[0_0_25px_rgba(168,85,247,0.5)]">
@@ -228,7 +234,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           </div>
         )}
 
-        {/* STAGE 3: SHATTER (3.2s - 4.8s) */}
         {phase === 'shatter' && (
           <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in zoom-in-110 duration-200">
             <div className="w-36 h-36 rounded-full bg-gradient-to-tr from-violet-600 via-rose-500 to-amber-400 blur-3xl opacity-70 animate-pulse pointer-events-none" />
@@ -246,10 +251,8 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           </div>
         )}
 
-        {/* STAGE 4: CLIMAX (4.8s onwards) - GRAND REVEAL WITH THUMBNAIL */}
         {phase === 'climax' && (
           <div className="flex flex-col items-center justify-center text-center px-4 max-w-3xl animate-in zoom-in-95 duration-400">
-            {/* Level Screenshot Thumbnail Banner - Prominently Displayed */}
             <div className="w-full max-w-md mb-4 rounded-2xl overflow-hidden border-2 border-violet-500/70 shadow-[0_0_35px_rgba(139,92,246,0.45)] group">
               <DemonThumbnail
                 levelId={demon.level_id}
@@ -298,7 +301,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     );
   }
 
-  // 3. TOP 150 MAIN LIST CUTSCENE (WITH LEVEL THUMBNAIL)
+  // 3. TOP 150 MAIN LIST CUTSCENE
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden select-none"
@@ -315,7 +318,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
         <X className="w-3.5 h-3.5" />
       </button>
 
-      {/* Top & bottom warning hazard banners */}
       <div className="absolute top-0 inset-x-0 h-3 bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 animate-pulse" />
       <div className="absolute bottom-0 inset-x-0 h-3 bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 animate-pulse" />
 
@@ -325,7 +327,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           <span>MAIN LIST EXTREME DEMON!</span>
         </div>
 
-        {/* Level Screenshot Thumbnail - Prominently Displayed */}
         <div className="w-full max-w-sm mb-3 rounded-2xl overflow-hidden border border-orange-500/60 shadow-[0_0_20px_rgba(249,115,22,0.35)]">
           <DemonThumbnail
             levelId={demon.level_id}
