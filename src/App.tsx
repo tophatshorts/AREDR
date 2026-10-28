@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import {
   DemonLevel,
@@ -440,56 +440,79 @@ export default function App() {
     loadDemons();
   }, []);
 
-  // Fetch Daily Hardest (Fast 1.5s Promise.race timeout)
-  async function fetchDailyHardest() {
+  // Fetch Daily Hardest with real-time listener (onSnapshot)
+  useEffect(() => {
     try {
       const q = query(collection(db, 'leaderboard'), orderBy('demonPosition', 'asc'), limit(1));
-      const fetchPromise = getDocs(q);
-      const timeoutPromise = new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500));
-
-      const snap = (await Promise.race([fetchPromise, timeoutPromise])) as any;
-      if (snap && !snap.empty) {
-        const top = snap.docs[0].data();
-        setDailyHardest({
-          username: top.username,
-          demonName: top.demonName,
-          demonPosition: top.demonPosition,
-        });
-      }
-    } catch (e) {}
-  }
-
-  useEffect(() => {
-    fetchDailyHardest();
+      const unsubscribe = onSnapshot(
+        q,
+        (snap: any) => {
+          if (!snap.empty) {
+            const top = snap.docs[0].data();
+            setDailyHardest({
+              username: String(top.username || ''),
+              demonName: String(top.demonName || ''),
+              demonPosition: Number(top.demonPosition || 0),
+            });
+          }
+        },
+        (error: any) => {
+          console.error('Daily Hardest onSnapshot error:', error);
+          alert(`Firestore Daily Hardest Error:\n${error instanceof Error ? error.message : String(error)}`);
+        }
+      );
+      return () => unsubscribe();
+    } catch (e) {
+      console.error('Daily Hardest setup error:', e);
+      alert(`Firestore Daily Hardest Setup Error:\n${e instanceof Error ? e.message : String(e)}`);
+    }
   }, []);
 
-  // Submit to Leaderboard
+  // Submit to Leaderboard with number conversions and high-score check
   async function submitToLeaderboard(res?: RollResult) {
     if (!user || !profileRef.current) return;
 
     const currentProf = profileRef.current;
     const targetDemon = res ? res.demon : currentProf.stats.hardestDemon;
-    
-    // ALWAYS pull rarity from the demon codex baseRarity as requested
-    const targetRarity = targetDemon ? targetDemon.baseRarity : 0;
-    const rollsCount = res ? res.rollNumber : currentProf.stats.totalRolls;
-
     if (!targetDemon) return;
+
+    const newPosition = Number(targetDemon.position);
+    const newRarity = Number(targetDemon.baseRarity || 0);
+    const newRolls = Number(res ? res.rollNumber : currentProf.stats.totalRolls);
+    const newTimestamp = Number(Date.now());
 
     try {
       const docRef = doc(db, 'leaderboard', user.uid);
-      await setDoc(docRef, {
-        userId: user.uid,
-        username: currentProf.username,
-        demonName: targetDemon.name,
-        demonPosition: targetDemon.position,
-        rarity: targetRarity,
-        rollsCount: rollsCount,
-        timestamp: Date.now(),
-      });
-      fetchDailyHardest();
+      const docSnap = await getDoc(docRef);
+
+      let shouldUpdate = true;
+      if (docSnap.exists()) {
+        const existing = docSnap.data();
+        const existingPosition = Number(existing.demonPosition || 9999);
+        const existingRolls = Number(existing.rollsCount || 0);
+
+        // Lower position is harder/better (e.g. #1 is harder than #150).
+        if (newPosition > existingPosition) {
+          shouldUpdate = false;
+        } else if (newPosition === existingPosition && newRolls >= existingRolls) {
+          shouldUpdate = false;
+        }
+      }
+
+      if (shouldUpdate) {
+        await setDoc(docRef, {
+          userId: String(user.uid),
+          username: String(currentProf.username),
+          demonName: String(targetDemon.name),
+          demonPosition: newPosition,
+          rarity: newRarity,
+          rollsCount: newRolls,
+          timestamp: newTimestamp,
+        });
+      }
     } catch (e) {
       console.error('Leaderboard submission error:', e);
+      alert(`Firestore Leaderboard Error:\n${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1073,6 +1096,26 @@ export default function App() {
         )}
       </div>
 
+      {/* Floating Bottom Left Firebase Status / Test Button */}
+      <div className="fixed bottom-4 left-4 z-50">
+        <button
+          onClick={async () => {
+            try {
+              const testRef = doc(db, 'system', 'ping');
+              await setDoc(testRef, { time: Number(Date.now()) });
+              alert("Firestore connection & write test SUCCESS!");
+            } catch (e: any) {
+              alert(`Firestore Error Test:\n${e?.message || String(e)}`);
+            }
+          }}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-zinc-950/90 border border-white/15 backdrop-blur-xl shadow-2xl text-xs font-mono font-semibold text-zinc-300 hover:text-white hover:border-amber-500/40 transition pointer-events-auto cursor-pointer"
+          title="Test Firestore Connection & View Errors"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>DB Status / Test</span>
+        </button>
+      </div>
+
       {/* Modals & Overlays */}
       {activeCutscene && (
         <CutsceneOverlay
@@ -1234,7 +1277,7 @@ export default function App() {
             </div>
             <h3 className="font-display font-bold text-xl text-white">Save Progress Notice</h3>
             <p className="text-sm text-zinc-300 font-sans leading-relaxed">
-              uh so guys i removed autosave cuz im broke and autosave hits quota limits quick. PLEASE MANUAL SAVE AFTER YOU HIT A BIG MILESTONE OR BEFORE QUITTING.
+              uh so guys i removed autosave cuz im broke and autosave hits quota limits quick. PLEASE MANUAL SAVE AFTER YOU HIT A BIG MILESTONE OR BEFORE QUITTING. UPDATE: the saving should work, but only after 2PM 28 October 2026. All progress saved locally until 2PM 28 October 2026.
             </p>
             <div className="flex items-center justify-center pt-2">
               <label className="flex items-center gap-2 text-xs text-zinc-300 font-sans cursor-pointer select-none">

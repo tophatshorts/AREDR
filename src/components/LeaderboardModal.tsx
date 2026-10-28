@@ -27,13 +27,26 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
       (snapshot) => {
         const list: LeaderboardEntry[] = [];
         snapshot.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+          const data = doc.data();
+          list.push({
+            id: doc.id,
+            userId: String(data.userId || ''),
+            username: String(data.username || ''),
+            demonName: String(data.demonName || ''),
+            demonPosition: Number(data.demonPosition || 0),
+            rarity: Number(data.rarity || 0),
+            rollsCount: Number(data.rollsCount || 0),
+            timestamp: Number(data.timestamp || 0),
+            dateStr: String(data.dateStr || ''),
+            monthStr: String(data.monthStr || ''),
+          } as LeaderboardEntry);
         });
         setEntries(list);
         setLoading(false);
       },
       (error) => {
-        console.warn('Leaderboard onSnapshot error / quota exceeded:', error);
+        console.error('Leaderboard onSnapshot error:', error);
+        alert(`Firestore Leaderboard Error:\n${error instanceof Error ? error.message : String(error)}`);
         setLoading(false);
       }
     );
