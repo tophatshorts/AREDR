@@ -415,42 +415,28 @@ export default function App() {
     async function loadDemons() {
       setIsLoadingDemons(true);
 
-      let demonList = [...fallbackDemonsRaw] as any[];
-
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-        const response = await fetch('https://aredl.pages.dev/api/levels', { signal: controller.signal });
-        clearTimeout(timeoutId);
-
+        const response = await fetch('/api/demons');
         if (response.ok) {
-          const liveData = await response.json();
-          const liveMap = new Map();
-          liveData.forEach((d: any) => liveMap.set(d.name.toLowerCase(), d));
-
-          demonList = demonList.map((d) => {
-            const live = liveMap.get(d.name.toLowerCase());
-            if (live) {
-              return {
-                ...d,
-                publisher: live.publisher || d.publisher || 'Unknown',
-                verifier: live.verifier || live.publisher || d.verifier || 'Unknown',
-              };
-            }
-            return {
+          const data = await response.json();
+          if (data && Array.isArray(data.demons)) {
+            const mapped = data.demons.map((d: any) => ({
               ...d,
-              verifier: d.verifier || d.publisher || 'GD Creator',
-            };
-          });
+              baseRarity: calculateDemonRarity(d.position, data.demons.length),
+            }));
+            setDemons(mapped);
+            setIsLoadingDemons(false);
+            return;
+          }
         }
       } catch (e) {
-        console.warn('Live demons fetch timed out or offline, instantly loaded bundled dataset:', e);
+        console.warn('Local demons API fetch failed, falling back to bundled data:', e);
       }
 
-      const bundled = demonList.map((d) => ({
+      // Fallback to bundled data if API fails
+      const bundled = (fallbackDemonsRaw as any[]).map((d) => ({
         ...d,
-        baseRarity: calculateDemonRarity(d.position, demonList.length),
+        baseRarity: calculateDemonRarity(d.position, fallbackDemonsRaw.length),
       }));
 
       setDemons(bundled);
@@ -619,6 +605,7 @@ export default function App() {
         points: result.demon.points || 0,
         baseRarity: result.demon.baseRarity || 1,
         level_id: result.demon.level_id || null,
+        tags: result.demon.tags || [],
       },
     };
     const recent = [lightweightResult, ...currentProf.stats.recentRolls.slice(0, 19)];
@@ -898,6 +885,19 @@ export default function App() {
                     <h2 className="mt-3.5 font-display text-4xl sm:text-5xl font-black text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] tracking-tight">
                       {currentResult.demon.name}
                     </h2>
+
+                    {currentResult.demon.tags && currentResult.demon.tags.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+                        {currentResult.demon.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 text-[10px] font-bold text-zinc-300 uppercase tracking-wider"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     <p className="mt-2 text-xs sm:text-sm text-zinc-300 font-medium">
                       By <span className="text-white font-semibold">{currentResult.demon.publisher}</span> · Verified by{' '}

@@ -276,6 +276,15 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             <p className="mt-2 text-zinc-300 text-sm max-w-xl font-sans">
               Published by <span className="text-violet-300 font-semibold">{demon.publisher}</span> • Verified by <span className="text-amber-300 font-semibold">{demon.verifier}</span>
             </p>
+            {demon.tags && demon.tags.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                {demon.tags.map((tag) => (
+                  <span key={tag} className="px-2 py-0.5 rounded-md bg-violet-900/50 border border-violet-500/30 text-violet-300 text-[10px] font-medium uppercase tracking-wider">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs font-mono">
               <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-violet-700/60 text-violet-300 font-semibold">
@@ -346,6 +355,15 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
         <div className="mt-1 text-zinc-300 text-sm">
           Rank <span className="font-extrabold text-amber-400">#{pos}</span> on AREDL • By {demon.publisher}
         </div>
+        {demon.tags && demon.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+            {demon.tags.map((tag) => (
+              <span key={tag} className="px-2 py-0.5 rounded-md bg-orange-900/40 border border-orange-500/30 text-orange-300 text-[10px] font-semibold uppercase tracking-wider">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 flex gap-3 text-xs font-mono">
           <span className="px-3 py-1 rounded bg-zinc-900 border border-orange-900 text-orange-300">

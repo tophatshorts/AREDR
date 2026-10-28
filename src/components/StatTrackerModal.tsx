@@ -28,7 +28,8 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.publisher.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.verifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(d.position).includes(searchQuery);
+      String(d.position).includes(searchQuery) ||
+      (d.tags && d.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
 
     if (!matchesSearch) return false;
 
@@ -139,6 +140,15 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                         <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
                           {hardest.points} AREDL Points {hardest.gddl_tier && `• GDDL Tier ${hardest.gddl_tier}`}
                         </p>
+                        {hardest.tags && hardest.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {hardest.tags.map(t => (
+                              <span key={t} className="px-2 py-0.5 rounded-md bg-zinc-800 text-[10px] text-zinc-400 border border-white/5">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -225,7 +235,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search demon name, creator, verifier, or rank..."
+                    placeholder="Search name, creator, verifier, tag (2.1, flow, learny)..."
                     className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-900/80 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
@@ -319,9 +329,18 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                             {isUnlocked && (
                               <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                             )}
+                            {demon.tags && demon.tags.length > 0 && (
+                              <div className="hidden sm:flex gap-1 ml-1">
+                                {demon.tags.slice(0, 2).map(t => (
+                                  <span key={t} className="px-1.5 py-0.5 rounded bg-zinc-800 text-[9px] text-zinc-500 border border-white/5">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="text-xs text-zinc-400 font-sans">
-                            By <span className="text-zinc-200 font-medium">{demon.publisher}</span> • Verified by <span className="text-amber-300 font-medium">{demon.verifier}</span>
+                            By <span className="text-zinc-200 font-medium">{demon.publisher}</span> • Ver. by <span className="text-amber-300 font-medium">{demon.verifier}</span>
                           </div>
                         </div>
                       </div>

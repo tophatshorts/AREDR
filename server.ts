@@ -167,20 +167,56 @@ async function refreshAredlData() {
             else if (pos <= 150) rating = 'Epic';
             else if (pos <= 500) rating = 'Featured';
 
+            // Extract tags and add custom ones
+            const tags = Array.isArray(d.tags) ? [...d.tags] : [];
+            const name = (d.name || '').toLowerCase();
+            
+            // Add version tags based on common knowledge/ID thresholds if level_id exists
+            if (d.level_id) {
+              const lid = Number(d.level_id);
+              if (lid >= 27000000) tags.push('2.1');
+              else if (lid >= 20000000) tags.push('2.0');
+              else if (lid >= 10000000) tags.push('1.9');
+              else tags.push('Old School');
+            }
+
+            // Style tags
+            if (name.includes('flow') || tags.includes('flow')) tags.push('Flow');
+            if (name.includes('memory') || tags.includes('memory') || name === 'limbo') tags.push('Memory');
+            if (name.includes('learn') || tags.includes('learny') || name.includes('sync')) tags.push('Learny');
+            if (pos <= 150) tags.push('Main List');
+            if (pos > 150 && pos <= 500) tags.push('Extended List');
+            if (pos > 500) tags.push('Legacy');
+
+            // Fix publisher/verifier mapping
+            // Many AREDL levels have publisher as a string or object.
+            let publisher = 'Unknown';
+            if (d.publisher) {
+              if (typeof d.publisher === 'string') publisher = d.publisher;
+              else if (typeof d.publisher === 'object') publisher = d.publisher.global_name || d.publisher.username || 'Unknown';
+            }
+
+            let verifier = publisher;
+            if (d.verifier) {
+              if (typeof d.verifier === 'string') verifier = d.verifier;
+              else if (typeof d.verifier === 'object') verifier = d.verifier.global_name || d.verifier.username || 'Unknown';
+            }
+
             return {
-              id: d.id,
+              id: d.id || `aredl-${d.position}`,
               name: d.name,
               position: d.position,
-              publisher: (d.publisher && (d.publisher.global_name || d.publisher.username)) || 'AREDL Creator',
+              publisher: publisher,
+              verifier: verifier,
               points: d.points || 0,
-              tags: d.tags || [],
+              tags: [...new Set(tags)], // Unique tags
               description: d.description || null,
               level_id: d.level_id || null,
               difficulty: 'Extreme Demon',
               rating,
               gddl_tier: d.gddl_tier !== null && d.gddl_tier !== undefined ? Math.round(d.gddl_tier * 10) / 10 : null,
               edel_enjoyment: d.edel_enjoyment !== null && d.edel_enjoyment !== undefined ? Math.round(d.edel_enjoyment) : null,
-              status: d.status || 'MainList',
+              status: d.status || (pos <= 150 ? 'MainList' : pos <= 500 ? 'Extended' : 'Legacy'),
             };
           })
           .sort((a: any, b: any) => a.position - b.position);
