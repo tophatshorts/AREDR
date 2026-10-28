@@ -44,7 +44,7 @@ export const LUCK_LEVELS = [
   { level: 4, mult: 4.5, cost: 5000 }, // Half of 10000
   { level: 5, mult: 6.5, cost: 20000 }, // Half of 40000
   { level: 6, mult: 9.0, cost: 60000 }, // Half of 120000
-  { level: 7, mult: 20.0, cost: 200000 },
+  { level: 7, mult: 40.0, cost: 200000 },
   { level: 8, mult: 32.0, cost: 600000 },
   { level: 9, mult: 64.0, cost: 2000000 }, // Level 9: 64x luck for 2M keys
 ];

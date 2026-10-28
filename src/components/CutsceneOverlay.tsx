@@ -134,7 +134,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             window.setTriggerScreenShake(true);
           }}
         >
-          <source src="/public/assets/aistudio/ScreenRecording_10-28-2026_10-31-39_1_249fa07e.mov" type="video/mp4" />
+          <source src="/assets/videos/ScreenRecording_10-28-2026_10-31-39_1_249fa07e.mov" type="video/mp4" />
         </video>
       </div>
     );

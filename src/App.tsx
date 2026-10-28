@@ -669,7 +669,7 @@ export default function App() {
       return;
     }
 
-    if (isSpinning || pendingRollResult || activeCutscene || showLogoutConfirm) {
+    if (isSpinning || pendingRollResult || activeCutscene || showLogoutConfirm || showAutosaveNotice) {
       if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
       return;
     }
@@ -1088,27 +1088,6 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Floating Save Status Indicator (Bottom Right) */}
-      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-zinc-950/90 border border-white/15 backdrop-blur-xl shadow-2xl text-xs font-mono font-semibold transition-all duration-300 pointer-events-none">
-        {saveStatus === 'saving' && (
-          <>
-            <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-            <span className="text-amber-300">{lastSavedCloud ? 'Saving to Cloud...' : 'Saving Locally...'}</span>
-          </>
-        )}
-        {saveStatus === 'saved' && (
-          <>
-            <Check className="w-3.5 h-3.5 text-emerald-400 animate-in zoom-in-50 duration-200" />
-            <span className="text-emerald-300">{lastSavedCloud ? 'Saved to Cloud!' : 'Saved Locally'}</span>
-          </>
-        )}
-        {saveStatus === 'idle' && (
-          <>
-            <Cloud className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-zinc-400">Local Save Active</span>
-          </>
-        )}
-      </div>
 
 
 
