@@ -36,7 +36,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
       const t1 = setTimeout(() => setPhase('breach'), 1000);
       const t2 = setTimeout(() => {
         setPhase('climax');
-        triggerConfetti(true);
       }, 2400);
 
       return () => {
@@ -56,7 +55,6 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
       const t2 = setTimeout(() => setPhase('shatter'), 3200);
       const t3 = setTimeout(() => {
         setPhase('climax');
-        triggerConfetti(false);
       }, 4800);
 
       return () => {
@@ -116,94 +114,28 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
   if (pos === 1) {
     return (
       <div
-        className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md overflow-hidden select-none"
-        onClick={onClose}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none"
+        onClick={() => {
+          onClose();
+          sound.playSFX('shatter'); // Example cool SFX
+          // @ts-ignore
+          window.setTriggerScreenShake(true);
+        }}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
+        <video
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+          onEnded={() => {
             onClose();
+            sound.playSFX('shatter');
+            // @ts-ignore
+            window.setTriggerScreenShake(true);
           }}
-          className="absolute top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold tracking-wide transition border border-zinc-700"
         >
-          <span>Skip</span>
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.25)_0%,rgba(0,0,0,0.95)_70%)] pointer-events-none" />
-
-        {phase === 'intro' && (
-          <div className="flex flex-col items-center justify-center text-center animate-pulse px-4">
-            <div className="flex items-center gap-3 px-5 py-2 rounded-full bg-orange-950/80 border border-orange-500 text-orange-400 font-mono text-sm tracking-widest uppercase mb-6 shadow-[0_0_15px_rgba(249,115,22,0.4)]">
-              <AlertTriangle className="w-5 h-5 text-orange-500 animate-spin" />
-              <span>CRITICAL ANOMALY DETECTED</span>
-            </div>
-            <h2 className="text-4xl md:text-6xl font-extrabold tracking-widest text-zinc-200">
-              VERIFICATION OVERLOAD
-            </h2>
-            <p className="mt-4 text-orange-400/90 font-mono text-lg tracking-wider">
-              922 HOURS • 396 STREAMS • 1 IN 100,000
-            </p>
-          </div>
-        )}
-
-        {phase === 'breach' && (
-          <div className="flex flex-col items-center justify-center text-center px-4">
-            <div className="w-32 h-32 rounded-full bg-orange-600/30 blur-2xl animate-ping" />
-            <div className="mt-8 text-2xl font-mono text-orange-500 tracking-widest uppercase font-bold animate-pulse">
-              THE KING OF DEMONS AWAKENS...
-            </div>
-          </div>
-        )}
-
-        {phase === 'climax' && (
-          <div className="flex flex-col items-center justify-center text-center px-4 max-w-4xl animate-in fade-in zoom-in-95 duration-500">
-            {/* Level Screenshot Thumbnail Banner */}
-            <div className="w-full max-w-lg mb-4 rounded-2xl overflow-hidden border-2 border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.5)]">
-              <DemonThumbnail
-                levelId={demon.level_id}
-                demonName={demon.name}
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <DemonDifficultyIcon position={1} size="lg" />
-              <RatingBadge rating="Mythic" size="lg" />
-            </div>
-
-            <div className="mt-3 flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border border-amber-400/60 text-amber-300 font-bold text-sm tracking-widest uppercase shadow-[0_0_15px_rgba(245,158,11,0.5)]">
-              <Trophy className="w-4 h-4 text-amber-400" />
-              <span>TOP #1 EXTREME DEMON • UNLOCKED ON ROLL #{rollNumber}</span>
-            </div>
-
-            <h1 className="mt-3 text-6xl md:text-8xl font-black tracking-tight bg-gradient-to-b from-amber-200 via-orange-400 to-orange-700 bg-clip-text text-transparent drop-shadow-[0_0_35px_rgba(245,158,11,0.8)]">
-              G R I E F
-            </h1>
-
-            <p className="mt-2 text-zinc-300 text-base md:text-lg max-w-2xl text-center leading-relaxed font-light">
-              &quot;One of the most anticipated top 1s in Geometry Dash history. Currently the hardest level in the game.&quot;
-            </p>
-
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm font-mono">
-              <span className="px-3 py-1 rounded bg-zinc-900 border border-zinc-700 text-amber-400 font-semibold">
-                Rarity: 1 in 100,000 (Base)
-              </span>
-              <span className="px-3 py-1 rounded bg-zinc-900 border border-zinc-700 text-emerald-400 font-semibold">
-                Reward: +100,000 Demon Orbs
-              </span>
-              <span className="px-3 py-1 rounded bg-zinc-900 border border-zinc-700 text-cyan-400 font-semibold">
-                Points: 5,000 AREDL
-              </span>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="mt-8 px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold text-base tracking-wider uppercase shadow-[0_0_25px_rgba(245,158,11,0.6)] transition transform hover:scale-105 active:scale-95"
-            >
-              Claim Victory
-            </button>
-          </div>
-        )}
+          <source src="/public/assets/aistudio/ScreenRecording_10-28-2026_10-31-39_1_249fa07e.mov" type="video/mp4" />
+        </video>
       </div>
     );
   }

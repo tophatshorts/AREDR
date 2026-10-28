@@ -162,6 +162,7 @@ export default function App() {
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showAutosaveNotice, setShowAutosaveNotice] = useState<boolean>(false);
   const [dismissNoticeChecked, setDismissNoticeChecked] = useState<boolean>(false);
+  const [triggerScreenShake, setTriggerScreenShake] = useState<boolean>(false);
 
   const [dailyHardest, setDailyHardest] = useState<{
     username: string;
@@ -183,6 +184,19 @@ export default function App() {
   useEffect(() => {
     handleRollRef.current = handleRoll;
   });
+
+  // Screen shake handler
+  useEffect(() => {
+    // @ts-ignore
+    window.setTriggerScreenShake = setTriggerScreenShake;
+
+    if (triggerScreenShake) {
+      const shakeTimer = setTimeout(() => {
+        setTriggerScreenShake(false);
+      }, 1000);
+      return () => clearTimeout(shakeTimer);
+    }
+  }, [triggerScreenShake]);
 
   // Auth Listener
   useEffect(() => {
@@ -805,7 +819,7 @@ export default function App() {
       </header>
 
       {/* Main Play Arena */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 flex flex-col justify-center items-center z-10">
+      <main className={`flex-1 max-w-4xl w-full mx-auto px-4 py-6 flex flex-col justify-center items-center z-10 transition-transform ${triggerScreenShake ? 'animate-shake' : ''}`}>
         {/* World Record / Daily Hardest Banner */}
         {dailyHardest && (
           <div className="mb-5 w-full max-w-xl px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-900/90 to-purple-500/10 border border-white/10 flex items-center justify-between text-xs backdrop-blur-md shadow-md">
