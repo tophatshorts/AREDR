@@ -230,9 +230,20 @@ export default function App() {
       // 3. Cloud Sync if user is signed in AND explicit manual save requested
       if (user && syncCloudNow) {
         try {
-          await setDoc(doc(db, 'users', user.uid), sanitized);
+          // Prune data for Firestore to avoid bloat (remove large arrays)
+          const cloudData = {
+            ...sanitized,
+            stats: {
+              ...sanitized.stats,
+              unlockedDemonIds: [], // Kept only in local storage
+              recentRolls: [],      // Kept only in local storage
+              sessionHardest: null, // Reset on cloud
+            }
+          };
+          await setDoc(doc(db, 'users', user.uid), cloudData);
         } catch (e) {
           console.warn('Cloud sync error:', e);
+          throw e; // Re-throw to handle in UI if needed
         }
       }
     },
@@ -282,12 +293,26 @@ export default function App() {
           const cloudRolls = cloudProfile.stats.totalRolls;
           const localKeys = localProfile.stats.totalKeysEarned;
           const cloudKeys = cloudProfile.stats.totalKeysEarned;
+          
+          // Use position comparison for hardest demon as a fallback/secondary check
+          const localHardestPos = localProfile.stats.hardestDemon?.position || 9999;
+          const cloudHardestPos = cloudProfile.stats.hardestDemon?.position || 9999;
 
-          if (localRolls > cloudRolls || (localRolls === cloudRolls && localKeys > cloudKeys)) {
+          if (localHardestPos < cloudHardestPos || localRolls > cloudRolls || (localRolls === cloudRolls && localKeys > cloudKeys)) {
             finalProfile = normalizeProfile({
               ...localProfile,
               id: user.uid,
               username: user.displayName || localProfile.username,
+            });
+          } else {
+            // Cloud is better or equal, but preserve local-only data (unlocked IDs, recent rolls)
+            finalProfile = normalizeProfile({
+              ...cloudProfile,
+              stats: {
+                ...cloudProfile.stats,
+                unlockedDemonIds: localProfile.stats.unlockedDemonIds,
+                recentRolls: localProfile.stats.recentRolls,
+              }
             });
           }
         }
@@ -343,7 +368,18 @@ export default function App() {
   async function handleLogout() {
     try {
       if (user && profileRef.current) {
-        await setDoc(doc(db, 'users', user.uid), profileRef.current).catch(() => {});
+        // Prune data for Firestore to avoid bloat (remove large arrays)
+        const sanitized = normalizeProfile(profileRef.current);
+        const cloudData = {
+          ...sanitized,
+          stats: {
+            ...sanitized.stats,
+            unlockedDemonIds: [],
+            recentRolls: [],
+            sessionHardest: null,
+          }
+        };
+        await setDoc(doc(db, 'users', user.uid), cloudData).catch(() => {});
       }
       await signOut(auth);
       setProfile(null);
@@ -433,13 +469,16 @@ export default function App() {
 
     const currentProf = profileRef.current;
     const targetDemon = res ? res.demon : currentProf.stats.hardestDemon;
-    const targetRarity = res ? res.effectiveRarity : targetDemon ? targetDemon.baseRarity : 0;
+    
+    // ALWAYS pull rarity from the demon codex baseRarity as requested
+    const targetRarity = targetDemon ? targetDemon.baseRarity : 0;
     const rollsCount = res ? res.rollNumber : currentProf.stats.totalRolls;
 
     if (!targetDemon) return;
 
     try {
-      await setDoc(doc(db, 'leaderboard', user.uid), {
+      const docRef = doc(db, 'leaderboard', user.uid);
+      await setDoc(docRef, {
         userId: user.uid,
         username: currentProf.username,
         demonName: targetDemon.name,
@@ -449,7 +488,9 @@ export default function App() {
         timestamp: Date.now(),
       });
       fetchDailyHardest();
-    } catch (e) {}
+    } catch (e) {
+      console.error('Leaderboard submission error:', e);
+    }
   }
 
   // Manual Save Trigger (Forces immediate save and indicator)
