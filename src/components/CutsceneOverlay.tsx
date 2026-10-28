@@ -128,6 +128,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           playsInline
           preload="auto"
           className="w-full h-full object-cover"
+          onError={(e) => console.error("Video error:", e.currentTarget.error)}
           onEnded={() => {
             onClose();
             sound.playSFX('shatter');
@@ -135,7 +136,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
             window.setTriggerScreenShake(true);
           }}
         >
-          <source src="/assets/videos/grief_cutscene.mp4" />
+          <source src="/assets/videos/grief_cutscene.mp4" type="video/mp4" />
         </video>
       </div>
     );
