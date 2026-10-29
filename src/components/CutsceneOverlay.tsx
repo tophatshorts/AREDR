@@ -11,7 +11,7 @@ interface Props {
   demon: DemonLevel;
   rollNumber: number;
   onClose: () => void;
-  cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100';
+  cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | 'ill-common';
 }
 
 type CutscenePhase = 'intro' | 'breach' | 'shatter' | 'climax';
@@ -33,7 +33,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
         ? 'ill-top10'
         : pos <= 100
         ? 'ill-top100'
-        : 'ill-first'
+        : 'ill-common'
       : 'normal'
   );
 
@@ -228,6 +228,8 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
                   ? 'TOP 10 IMPOSSIBLE BREACH'
                   : isIllTop100
                   ? 'TOP 100 IMPOSSIBLE CLASS DETECTED'
+                  : isIll
+                  ? 'IMPOSSIBLE CLASS DETECTED'
                   : 'DIMENSIONAL ANOMALY DETECTED'}
               </span>
             </div>
@@ -243,6 +245,8 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
                 ? 'TOP 10 IMPOSSIBLE'
                 : isIllTop100
                 ? 'TOP 100 ILL RIFT'
+                : isIll
+                ? 'IMPOSSIBLE DEMON'
                 : 'TOP 10 FREQUENCY'}
             </h3>
             

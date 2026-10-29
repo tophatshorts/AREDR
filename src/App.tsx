@@ -105,6 +105,7 @@ function normalizeProfile(raw: any): PlayerProfile {
       recentRolls: Array.isArray(raw?.stats?.recentRolls) ? raw.stats.recentRolls : [],
       sessionHardest: raw?.stats?.sessionHardest || null,
       streakWithoutTop150: typeof raw?.stats?.streakWithoutTop150 === 'number' ? raw.stats.streakWithoutTop150 : 0,
+      hasSeenFirstILL: Boolean(raw?.stats?.hasSeenFirstILL),
     },
     settings: {
       autoRoll: Boolean(raw?.settings?.autoRoll),
@@ -194,7 +195,7 @@ export default function App() {
   const [pendingRollResult, setPendingRollResult] = useState<RollResult | null>(null);
   const [currentResult, setCurrentResult] = useState<RollResult | null>(null);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
-  const [activeCutscene, setActiveCutscene] = useState<(RollResult & { cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' }) | null>(null);
+  const [activeCutscene, setActiveCutscene] = useState<(RollResult & { cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | 'ill-common' }) | null>(null);
 
 
   // Save Indicator & Confirmation States
@@ -732,7 +733,7 @@ export default function App() {
     setPendingRollResult(null);
     pendingRollResultRef.current = null;
 
-    let cutsceneTypeToTrigger: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | undefined = undefined;
+    let cutsceneTypeToTrigger: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | 'ill-common' | undefined = undefined;
     let markFirstIllSeen = false;
 
     const pos = result.demon.position;
@@ -749,6 +750,8 @@ export default function App() {
         cutsceneTypeToTrigger = 'ill-top10';
       } else if (pos <= 100) {
         cutsceneTypeToTrigger = 'ill-top100';
+      } else {
+        cutsceneTypeToTrigger = 'ill-common';
       }
       
       if (cutsceneTypeToTrigger === 'ill-top1') shouldSkip = currentProf.settings.cutsceneSkipSettings.illTop1;

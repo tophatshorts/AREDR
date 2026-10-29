@@ -144,6 +144,9 @@ test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-18
       name: `Demon #${i}`,
       position: i,
       baseRarity: calculateDemonRarity(i, 1644),
+      publisher: 'TestPublisher',
+      verifier: 'TestVerifier',
+      points: 100,
     });
   }
 
@@ -156,6 +159,9 @@ test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-18
       position: i,
       baseRarity: calculateIllRarity(i, 1500),
       isImpossible: true,
+      publisher: 'TestPublisher',
+      verifier: 'TestVerifier',
+      points: 1000,
     });
   }
 
