@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateDemonRarity,
+  calculateIllRarity,
   getDemonTier,
   calculateKeys,
   getEffectiveLuck,
@@ -45,8 +46,8 @@ test('calculateKeys gives scale appropriate rewards', () => {
   assert.equal(calculateKeys(1609, 0), 1);
   // Level 1 multiplier (1.5x)
   assert.equal(calculateKeys(150, 1), 3750);
-  // Rebirth grants no key multiplier (just luck)
-  assert.equal(calculateKeys(150, 0, false, 1), 2500);
+  // Rebirth grants 5x key multiplier for Tier 1
+  assert.equal(calculateKeys(150, 0, false, 1), 12500);
 });
 
 test('effective luck scales with upgrades, rebirth, and dry streak', () => {
@@ -133,3 +134,65 @@ test('demon levels support level_id, difficulty, verifier, and rating properties
   assert.equal(griefLevel.publisher, 'icedcave');
   assert.equal(griefLevel.verifier, 'Doggie');
 });
+
+test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-180 rolls at Max Luck', () => {
+  // Generate 1644 standard demons
+  const standardDemons: DemonLevel[] = [];
+  for (let i = 1; i <= 1644; i++) {
+    standardDemons.push({
+      id: `aredl-${i}`,
+      name: `Demon #${i}`,
+      position: i,
+      baseRarity: calculateDemonRarity(i, 1644),
+    });
+  }
+
+  // Generate 1500 ILL levels
+  const illLevels: DemonLevel[] = [];
+  for (let i = 1; i <= 1500; i++) {
+    illLevels.push({
+      id: `ill-${i}`,
+      name: `ILL #${i}`,
+      position: i,
+      baseRarity: calculateIllRarity(i, 1500),
+      isImpossible: true,
+    });
+  }
+
+  // 1. BASE LUCK (luckLevel = 0)
+  const baseUpgrades: PlayerUpgrades = {
+    luckLevel: 0,
+    hasQuickRoll: false,
+    hasAutoRoll: false,
+    keysMultiplierLevel: 0,
+    pityTierLevel: 0,
+    streakChargeLevel: 0,
+    rebirthCount: 1,
+  };
+
+  let baseIllCount = 0;
+  const simRolls = 10000;
+  for (let roll = 1; roll <= simRolls; roll++) {
+    const res = executeRoll(standardDemons, baseUpgrades, 1, null, 0, undefined, illLevels);
+    if (res.demon.isImpossible) baseIllCount++;
+  }
+  const avgBaseRolls = simRolls / baseIllCount;
+
+  // 2. MAX LUCK (luckLevel = 10)
+  const maxUpgrades: PlayerUpgrades = {
+    ...baseUpgrades,
+    luckLevel: 10,
+  };
+
+  let maxIllCount = 0;
+  for (let roll = 1; roll <= simRolls; roll++) {
+    const res = executeRoll(standardDemons, maxUpgrades, 1, null, 0, undefined, illLevels);
+    if (res.demon.isImpossible) maxIllCount++;
+  }
+  const avgMaxRolls = simRolls / maxIllCount;
+
+  // Assertions
+  assert.ok(avgMaxRolls >= 120 && avgMaxRolls <= 180, `Max Luck ILL drop rate should be 120-180 rolls (got 1 in ${Math.round(avgMaxRolls)})`);
+  assert.ok(avgBaseRolls > avgMaxRolls, `Base luck should be rarer than max luck (got base: 1 in ${Math.round(avgBaseRolls)}, max: 1 in ${Math.round(avgMaxRolls)})`);
+});
+

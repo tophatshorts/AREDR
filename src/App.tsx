@@ -1,4 +1,4 @@
-// Version 2.0.9 - Fix Auto-Roll Persistence on Skip
+// Version 2.1.0 - Organic ILL Drops Rebalance
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
@@ -1583,7 +1583,7 @@ export default function App() {
               </div>
               <div>
                 <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
-                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.9 • Auto-Roll Persistence</p>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.1.0 • Organic ILL Boost</p>
               </div>
             </div>
 
@@ -1593,8 +1593,8 @@ export default function App() {
                   <SkipForward className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Advanced Skip Controls</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Grief skip fixed! Added "Skip All" and "Watch All" buttons in Settings for instant control over your cinematic experience.</p>
+                  <h4 className="text-sm font-bold text-white">Luck-Scaled ILL Drop Rate</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">ILL levels drop every 120–180 rolls at Max Luck (1 in ~500–700 at Base Luck), while maintaining their official 1 in 1M+ display rarity!</p>
                 </div>
               </div>
 

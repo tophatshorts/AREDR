@@ -281,8 +281,13 @@ export function executeRoll(
       weight *= Math.pow(totalLuck, 1.5);
     }
 
-    // ILL levels are 40x more common than their base rarity suggests
-    if (demon.isImpossible) weight *= 40;
+    // ILL levels drop rate scales with Luck upgrades:
+    // Base Luck (luckLevel 0): ~1 in 500-700 rolls
+    // Max Luck (luckLevel 10): ~1 in 120-180 rolls
+    if (demon.isImpossible) {
+      const luckScale = 1 + (upgrades.luckLevel / 10) * 2.3; // Scales from 1.0x at Luck 0 to 3.3x at Luck 10
+      weight *= (32 * luckScale);
+    }
 
     // Boost top standard AREDL demons slightly when lucky (do NOT apply to top ILL levels)
     if (!demon.isImpossible && demon.position <= 10) weight *= (1 + (totalLuck - 1) * 0.3);
