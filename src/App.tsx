@@ -1,4 +1,4 @@
-// Version 2.0.4 - GitHub Sync Trigger
+// Version 2.0.6 - GitHub Sync Trigger
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
@@ -1559,7 +1559,7 @@ export default function App() {
               </div>
               <div>
                 <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
-                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.4 • Luck Refined</p>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.6 • Static Deployment Fix</p>
               </div>
             </div>
 

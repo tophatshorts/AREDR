@@ -128,7 +128,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
   // 1. TOP 1 GRIEF OR OPEN WINDOW APEX CUTSCENE (MOBILE FIXED)
   if (pos === 1) {
     const videoSrc = isIll 
-      ? `/assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mov`
+      ? `${import.meta.env.BASE_URL || ''}assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mov`
       : `${import.meta.env.BASE_URL || ''}assets/videos/grief_cutscene.mp4`;
 
     return (
