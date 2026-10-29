@@ -128,7 +128,7 @@ export const UpgradesModal: React.FC<Props> = ({
                   <p className="text-xs text-zinc-300 mt-1 font-sans">
                     {nextRebirthTier ? (
                       <>
-                        Rebirth Tier {nextRebirthTier.level}: Resets upgrades, grants <strong className="text-purple-300">{nextRebirthTier.luckMult}x Luck</strong>, <strong className="text-emerald-300">5x Demon Key Boost</strong>, 2,500 starting keys, and{' '}
+                        Rebirth Tier {nextRebirthTier.level}: Resets upgrades, grants <strong className="text-purple-300">{nextRebirthTier.luckMult}x Luck</strong>, <strong className="text-emerald-300">{nextRebirthTier.level === 1 ? '5x' : nextRebirthTier.level === 2 ? '7.5x' : '10x'} Demon Key Boost</strong>, 2,500 starting keys, and{' '}
                         {nextRebirthTier.level === 1 ? (
                           <strong className="text-amber-300">Unlocks Lower ILL Levels (Ranks 501+)</strong>
                         ) : nextRebirthTier.level === 2 ? (
@@ -139,7 +139,7 @@ export const UpgradesModal: React.FC<Props> = ({
                       </>
                     ) : (
                       <>
-                        Max Rebirth Tier Reached! You possess <strong className="text-purple-300">50x Luck</strong>, <strong className="text-emerald-300">5x Demon Key Boost</strong>, and <strong className="text-amber-300">All ILL Levels Unlocked (Top 1 "Open Window")</strong>.
+                        Max Rebirth Tier Reached! You possess <strong className="text-purple-300">50x Luck</strong>, <strong className="text-emerald-300">10x Demon Key Boost</strong>, and <strong className="text-amber-300">All ILL Levels Unlocked (Top 1 "Open Window")</strong>.
                       </>
                     )}
                   </p>

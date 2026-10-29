@@ -48,11 +48,11 @@ export function calculateKeys(
   let baseKeys = 1; // Base keys reward
   if (isImpossible) {
     if (position <= 1) {
-      baseKeys = 10000000; // Top 1 ILL gives exactly 10 million keys!
+      baseKeys = 2000000; // Top 1 ILL gives exactly 2 million keys (1/5 of 10M)
     } else {
-      // Linear scale from Top 2 (7.5M keys) down to lowest ILL rank (1.5M keys)
-      const maxKeys = 7500000; // Top 2 ILL
-      const minKeys = 1500000; // Lowest ILL level
+      // Linear scale from Top 2 (1.5M keys) down to lowest ILL rank (300K keys)
+      const maxKeys = 1500000; // Top 2 ILL (1/5 of 7.5M)
+      const minKeys = 300000; // Lowest ILL level (1/5 of 1.5M)
       const total = Math.max(2, totalIllLevels || 2097);
       const fraction = (position - 2) / Math.max(1, total - 2);
       baseKeys = Math.round(maxKeys - Math.min(1, Math.max(0, fraction)) * (maxKeys - minKeys));
@@ -70,9 +70,15 @@ export function calculateKeys(
   const mult = KEYS_MULTIPLIER_LEVELS[keysMultiplierLevel]?.mult || 1.0;
   let finalKeys = Math.round(baseKeys * mult);
 
-  // Rebirth Bonus: 5x Demon Key boost
+  // Rebirth Bonus: Tiered multipliers
+  // T1: 5x, T2: 7.5x, T3: 10x
   if (rebirthCount > 0) {
-    finalKeys *= 5;
+    let rebirthKeyMult = 1;
+    if (rebirthCount === 1) rebirthKeyMult = 5;
+    else if (rebirthCount === 2) rebirthKeyMult = 7.5;
+    else rebirthKeyMult = 10;
+    
+    finalKeys *= rebirthKeyMult;
   }
 
   return finalKeys;
@@ -163,15 +169,29 @@ export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number =
   };
 }
 
-// Rarity calculation for Impossible Levels
+// Rarity calculation for Impossible Levels (Ensures all ILL are rarer than Grief #1 AREDL)
 export function calculateIllRarity(position: number, total: number = 2097): number {
-  if (position <= 1) return 1000000; // Top 1 Open Window (1 in 1,000,000)
-  if (position <= 10) return Math.round(950000 - (position - 2) * 50000); // Top 10 ILL (500k to 950k)
-  if (position <= 50) return Math.round(500000 - (position - 10) * 10000); // Top 50 ILL (100k to 500k)
-  if (position <= 150) return Math.round(100000 - (position - 50) * 800); // Top 150 ILL (20k to 100k)
-  if (position <= 500) return Math.round(20000 - (position - 150) * 50); // Top 500 ILL (2.5k to 20k)
-  if (position <= 1000) return Math.round(2500 - (position - 500) * 3); // Top 1,000 ILL (1k to 2.5k)
-  return Math.max(10, Math.round(1000 - ((position - 1000) / (total - 1000)) * 980)); // Lower ILL (10 to 1,000)
+  if (position <= 1) return 5000000; // Top 1 Open Window (1 in 5,000,000)
+  if (position <= 10) return Math.round(4500000 - (position - 2) * 200000); // Top 10 ILL (2.7M to 4.5M)
+  if (position <= 50) return Math.round(2500000 - (position - 10) * 45000); // Top 50 ILL (700k to 2.5M)
+  if (position <= 150) return Math.round(700000 - (position - 50) * 4500); // Top 150 ILL (250k to 700k)
+  if (position <= 500) return Math.round(250000 - (position - 150) * 200); // Top 500 ILL (180k to 250k)
+  if (position <= 1000) return Math.round(180000 - (position - 500) * 50); // Top 1,000 ILL (155k to 180k)
+  return Math.max(100001, Math.round(155000 - ((position - 1000) / (total - 1000)) * 54999)); // Lower ILL (100,001 to 155k)
+}
+
+/**
+ * Returns true if demonA is objectively harder than demonB based on list hierarchy
+ */
+export function isHarder(demonA: DemonLevel, demonB: DemonLevel | null): boolean {
+  if (!demonB) return true;
+  
+  // Impossible levels (ILL) are always harder than standard Rated levels (AREDL)
+  if (demonA.isImpossible && !demonB.isImpossible) return true;
+  if (!demonA.isImpossible && demonB.isImpossible) return false;
+  
+  // If in the same list, lower numerical position is harder
+  return Number(demonA.position) < Number(demonB.position);
 }
 
 /**
@@ -181,7 +201,7 @@ export function executeRoll(
   allDemons: DemonLevel[],
   upgrades: PlayerUpgrades,
   rollNumber: number,
-  currentHardestPos: number | null = null,
+  currentHardest: DemonLevel | null = null,
   streakCount: number = 0,
   deterministicSeed?: number,
   impossibleLevels: DemonLevel[] = [],
@@ -290,12 +310,7 @@ export function executeRoll(
     upgrades.rebirthCount || 0
   );
   
-  // A demon is a personal best if its base rarity exceeds the current hardest demon's rarity
-  const currentHardestDemon = currentHardestPos !== null ? allDemons.find(d => d.position === currentHardestPos) : null;
-  const isNewPersonalBest =
-    currentHardestDemon === null ||
-    selectedDemon.baseRarity > (currentHardestDemon?.baseRarity || 0);
-
+  const isNewPersonalBest = isHarder(selectedDemon, currentHardest);
   const tier = getDemonTier(selectedDemon.position, selectedDemon.isImpossible);
 
   return {

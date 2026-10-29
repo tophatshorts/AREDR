@@ -24,6 +24,7 @@ import {
   REBIRTH_COST,
   REBIRTH_TIERS,
   ILL_LEADERBOARD_OFFSET,
+  isHarder,
 } from './game/rng';
 import { sound } from './game/sound';
 import { DemonDifficultyIcon } from './components/DemonDifficultyIcon';
@@ -677,13 +678,13 @@ export default function App() {
     isSpinningRef.current = true;
 
     const nextRollNumber = currentProf.stats.totalRolls + 1;
-    const currentHardestPos = currentProf.stats.hardestDemon ? currentProf.stats.hardestDemon.position : null;
+    const hardestDemon = currentProf.stats.hardestDemon;
 
     const result = executeRoll(
       demons,
       currentProf.upgrades,
       nextRollNumber,
-      currentHardestPos,
+      hardestDemon,
       currentProf.stats.streakWithoutTop150,
       undefined,
       impossibleLevels,
@@ -743,7 +744,7 @@ export default function App() {
     const newHardestRollNum = isPB ? result.rollNumber : currentProf.stats.hardestRollNumber;
     const newHardestTimestamp = isPB ? Date.now() : currentProf.stats.hardestTimestamp;
 
-    const isSessionPB = !currentProf.stats.sessionHardest || result.demon.position < currentProf.stats.sessionHardest.position;
+    const isSessionPB = isHarder(result.demon, currentProf.stats.sessionHardest);
     const newSessionHardest = isSessionPB ? result.demon : currentProf.stats.sessionHardest;
 
     const unlocked = currentProf.stats.unlockedDemonIds.includes(result.demon.id)
@@ -1545,8 +1546,8 @@ export default function App() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">5x Key Boost & Rebalance</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a permanent 5x Demon Key multiplier. Upgrade costs now scale by 3x per tier.</p>
+                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & Rebalance</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier that scales per tier (T1: 5x, T2: 7.5x, T3: 10x). ILL levels give 80% fewer keys (1/5).</p>
                 </div>
               </div>
 

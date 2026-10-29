@@ -128,7 +128,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                 )}
                 <div className="flex flex-col md:flex-row items-center gap-5">
                   {hardest ? (
-                    <DemonDifficultyIcon position={hardest.position} size="xl" showLabel />
+                    <DemonDifficultyIcon position={hardest.position} isImpossible={hardest.isImpossible} size="xl" showLabel />
                   ) : (
                     <div className="w-20 h-20 rounded-2xl bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-600">
                       <Trophy className="w-8 h-8" />
