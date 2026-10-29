@@ -1,4 +1,4 @@
-// Version 2.0.3 - GitHub Sync Trigger
+// Version 2.0.4 - GitHub Sync Trigger
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
@@ -1559,7 +1559,7 @@ export default function App() {
               </div>
               <div>
                 <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
-                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.3 • Cinematic Apex</p>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.4 • Luck Refined</p>
               </div>
             </div>
 
@@ -1579,8 +1579,8 @@ export default function App() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & ILL 10x Luck</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier (T1: 5x, T2: 7.5x, T3: 10x). ILL levels are now 10x more likely to roll while keeping their legendary status!</p>
+                  <h4 className="text-sm font-bold text-white">Luck Scaling Fix & 40x ILL Boost</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Luck upgrades now correctly increase the probability of rare demons. ILL levels are now 40x more likely to roll! (Avg 1 in 500 or less with luck).</p>
                 </div>
               </div>
 

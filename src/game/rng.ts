@@ -1,4 +1,4 @@
-// Version 2.0.3 - GitHub Sync Trigger
+// Version 2.0.4 - GitHub Sync Trigger
 import { DemonLevel, DemonTier, PlayerUpgrades, RollResult } from './types';
 
 export const ILL_LEADERBOARD_OFFSET = -10000;
@@ -272,11 +272,17 @@ export function executeRoll(
     }
 
     const baseRarity = demon.baseRarity;
-    // Compress the weight gap: rarity^-0.8 makes rare demons reachable with luck upgrades
-    let weight = Math.pow(1 / baseRarity, 0.8) * Math.pow(totalLuck, 1.5);
+    // Compress the weight gap: rarity^-0.8 makes rare demons reachable
+    let weight = Math.pow(1 / baseRarity, 0.8);
 
-    // ILL levels are 10x more common than their base rarity suggests
-    if (demon.isImpossible) weight *= 10;
+    // Apply Luck: Only rare demons (rarity > 2) get the luck multiplier.
+    // This ensures that luck actually shifts the probability towards rare demons.
+    if (baseRarity > 2) {
+      weight *= Math.pow(totalLuck, 1.5);
+    }
+
+    // ILL levels are 40x more common than their base rarity suggests
+    if (demon.isImpossible) weight *= 40;
 
     // Boost top standard AREDL demons slightly when lucky (do NOT apply to top ILL levels)
     if (!demon.isImpossible && demon.position <= 10) weight *= (1 + (totalLuck - 1) * 0.3);
