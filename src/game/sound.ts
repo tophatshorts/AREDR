@@ -311,6 +311,14 @@ class SoundEngine {
       });
     }, 2100);
   }
+  public playLevelUp() {
+    this.playRareChime();
+  }
+
+  public playCutscene() {
+    this.playTop150Slam();
+  }
+
   // Generic SFX player
   public playSFX(type: 'shatter') {
     const ctx = this.getContext();

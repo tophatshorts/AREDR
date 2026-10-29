@@ -170,15 +170,16 @@ export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number =
   };
 }
 
-// Rarity calculation for Impossible Levels (Entry is 1 in 1M, Top 1 is 1 in 10M)
+// Rarity calculation for Impossible Levels (Entry is 1 in 100,000, Top 1 is 1 in 10,000,000)
 export function calculateIllRarity(position: number, total: number = 2097): number {
   if (position <= 1) return 10000000; // Top 1 Open Window (1 in 10,000,000)
-  if (position <= 10) return Math.round(9000000 - (position - 2) * 500000); // Top 10 ILL (~5M to 9M)
-  if (position <= 50) return Math.round(5000000 - (position - 10) * 50000); // Top 50 ILL (3M to 5M)
-  if (position <= 150) return Math.round(3000000 - (position - 50) * 15000); // Top 150 ILL (1.5M to 3M)
-  if (position <= 500) return Math.round(1500000 - (position - 150) * 1000); // Top 500 ILL (1.15M to 1.5M)
-  if (position <= 1000) return Math.round(1150000 - (position - 500) * 150); // Top 1,000 ILL (1.07M to 1.15M)
-  return Math.max(1000000, Math.round(1075000 - ((position - 1000) / (total - 1000)) * 75000)); // Lower ILL (1M to 1.07M)
+  if (position <= 10) return Math.round(9000000 - (position - 2) * 444444); // Top 10 ILL (~5M to 9M)
+  if (position <= 50) return Math.round(5000000 - (position - 10) * 75000); // Top 50 ILL (2M to 5M)
+  if (position <= 150) return Math.round(2000000 - (position - 50) * 12000); // Top 150 ILL (800k to 2M)
+  if (position <= 500) return Math.round(800000 - (position - 150) * 1400); // Top 500 ILL (310k to 800k)
+  if (position <= 1000) return Math.round(310000 - (position - 500) * 260); // Top 1,000 ILL (180k to 310k)
+  const maxTotal = Math.max(1001, total);
+  return Math.max(100000, Math.round(180000 - ((position - 1000) / Math.max(1, maxTotal - 1000)) * 80000)); // Lower ILL (100k to 180k)
 }
 
 /**
@@ -193,6 +194,97 @@ export function isHarder(demonA: DemonLevel, demonB: DemonLevel | null): boolean
   
   // If in the same list, lower numerical position is harder
   return Number(demonA.position) < Number(demonB.position);
+}
+
+/**
+ * Sample an ILL level according to the exact requested sub-tier probabilities:
+ * Ranks <= 1 (Open Window #1): 1%
+ * Ranks 2..10 (Top 10 ILL): 10%
+ * Ranks 11..100 (Top 100 ILL): 25%
+ * Ranks 101+ (Top 1000+ ILL): 64%
+ */
+function sampleIllLevel(allowedIllLevels: DemonLevel[], randVal: number): DemonLevel {
+  const top1Pool = allowedIllLevels.filter((d) => d.position <= 1);
+  const top10Pool = allowedIllLevels.filter((d) => d.position >= 2 && d.position <= 10);
+  const top100Pool = allowedIllLevels.filter((d) => d.position >= 11 && d.position <= 100);
+  const lowerPool = allowedIllLevels.filter((d) => d.position >= 101);
+
+  // Target weights: 0.01 (1%), 0.10 (10%), 0.25 (25%), 0.64 (64%)
+  let wTop1 = top1Pool.length > 0 ? 0.01 : 0;
+  let wTop10 = top10Pool.length > 0 ? 0.10 : 0;
+  let wTop100 = top100Pool.length > 0 ? 0.25 : 0;
+  let wLower = lowerPool.length > 0 ? 0.64 : 0;
+
+  const totalW = wTop1 + wTop10 + wTop100 + wLower;
+  if (totalW === 0) {
+    const idx = Math.min(Math.floor(randVal * allowedIllLevels.length), allowedIllLevels.length - 1);
+    return allowedIllLevels[idx];
+  }
+
+  // Normalize weights
+  wTop1 /= totalW;
+  wTop10 /= totalW;
+  wTop100 /= totalW;
+  wLower /= totalW;
+
+  let chosenPool: DemonLevel[];
+  let subRand = randVal;
+
+  if (randVal < wTop1) {
+    chosenPool = top1Pool;
+    subRand = randVal / wTop1;
+  } else if (randVal < wTop1 + wTop10) {
+    chosenPool = top10Pool;
+    subRand = (randVal - wTop1) / wTop10;
+  } else if (randVal < wTop1 + wTop10 + wTop100) {
+    chosenPool = top100Pool;
+    subRand = (randVal - wTop1 - wTop10) / wTop100;
+  } else {
+    chosenPool = lowerPool;
+    subRand = (randVal - wTop1 - wTop10 - wTop100) / wLower;
+  }
+
+  const idx = Math.min(Math.floor(subRand * chosenPool.length), chosenPool.length - 1);
+  return chosenPool[idx];
+}
+
+/**
+ * Sample a standard AREDL level based on standard rarity weights
+ */
+function sampleAredlLevel(aredlPool: DemonLevel[], totalLuck: number, randVal: number): DemonLevel {
+  const weights: number[] = [];
+  let totalWeight = 0;
+
+  for (let i = 0; i < aredlPool.length; i++) {
+    const demon = aredlPool[i];
+    const baseRarity = demon.baseRarity;
+    let weight = Math.pow(1 / baseRarity, 0.8);
+
+    if (baseRarity > 2) {
+      weight *= Math.pow(totalLuck, 1.5);
+    }
+    if (demon.position <= 10) {
+      weight *= (1 + (totalLuck - 1) * 0.3);
+    }
+
+    weights.push(weight);
+    totalWeight += weight;
+  }
+
+  if (totalWeight <= 0) {
+    const idx = Math.min(Math.floor(randVal * aredlPool.length), aredlPool.length - 1);
+    return aredlPool[idx];
+  }
+
+  let target = randVal * totalWeight;
+  for (let i = 0; i < aredlPool.length; i++) {
+    target -= weights[i];
+    if (target <= 0) {
+      return aredlPool[i];
+    }
+  }
+
+  return aredlPool[aredlPool.length - 1];
 }
 
 /**
@@ -235,88 +327,45 @@ export function executeRoll(
     }
   }
 
-  // Build active roll pool
-  let pool: DemonLevel[];
-  if (testIllOnly && allowedIllLevels.length > 0) {
-    pool = allowedIllLevels;
-  } else if (hasImpossibleUnlocked && allowedIllLevels.length > 0) {
-    pool = [...allDemons, ...allowedIllLevels];
-  } else {
-    pool = allDemons;
-  }
-
   // Check Pity
   const pityTier = PITY_LEVELS[upgrades.pityTierLevel] || PITY_LEVELS[0];
   const isPityTriggered = pityTier.rollsNeeded > 0 && rollNumber % pityTier.rollsNeeded === 0;
 
-  // Calculate weighted probabilities for each demon rank
-  const weights: number[] = [];
-  let totalWeight = 0;
+  const randPrimary = deterministicSeed !== undefined ? deterministicSeed : Math.random();
 
-  for (let i = 0; i < pool.length; i++) {
-    const demon = pool[i];
+  let selectedDemon: DemonLevel;
 
-    // Check Pity constraints
-    if (isPityTriggered) {
-      if (pityTier.isIll) {
-        if (!demon.isImpossible || demon.position > (pityTier.illMaxPos || 1000)) {
-          weights.push(0);
-          continue;
-        }
-      } else {
-        if (demon.isImpossible || demon.position > pityTier.guaranteedPos) {
-          weights.push(0);
-          continue;
-        }
-      }
+  if (testIllOnly && allowedIllLevels.length > 0) {
+    selectedDemon = sampleIllLevel(allowedIllLevels, randPrimary);
+  } else if (isPityTriggered) {
+    if (pityTier.isIll && allowedIllLevels.length > 0) {
+      const pityIllPool = allowedIllLevels.filter((d) => d.position <= (pityTier.illMaxPos || 1000));
+      const poolToUse = pityIllPool.length > 0 ? pityIllPool : allowedIllLevels;
+      selectedDemon = sampleIllLevel(poolToUse, randPrimary);
+    } else {
+      const pityAredlPool = allDemons.filter((d) => d.position <= pityTier.guaranteedPos);
+      const poolToUse = pityAredlPool.length > 0 ? pityAredlPool : allDemons;
+      selectedDemon = sampleAredlLevel(poolToUse, totalLuck, randPrimary);
     }
+  } else if (hasImpossibleUnlocked && allowedIllLevels.length > 0) {
+    // ILL Spin rate scales from 1 in 600 at Base Luck to 1 in 100 at Max Luck
+    const luckProgress = Math.min(1, Math.max(0, upgrades.luckLevel / 10));
+    const illDropRate = (1 / 600) + luckProgress * ((1 / 100) - (1 / 600));
 
-    const baseRarity = demon.baseRarity;
-    // Compress the weight gap: rarity^-0.8 makes rare demons reachable
-    let weight = Math.pow(1 / baseRarity, 0.8);
-
-    // Apply Luck: Only rare demons (rarity > 2) get the luck multiplier.
-    // This ensures that luck actually shifts the probability towards rare demons.
-    if (baseRarity > 2) {
-      weight *= Math.pow(totalLuck, 1.5);
+    if (randPrimary < illDropRate) {
+      // ILL Spin triggered!
+      const randSub = (randPrimary * 100003) % 1;
+      selectedDemon = sampleIllLevel(allowedIllLevels, randSub);
+    } else {
+      // Normal AREDL Roll
+      const randSub = (randPrimary - illDropRate) / (1 - illDropRate);
+      selectedDemon = sampleAredlLevel(allDemons, totalLuck, Math.abs(randSub));
     }
-
-    // ILL levels drop rate scales with Luck upgrades:
-    // Base Luck (luckLevel 0): ~1 in 500-700 rolls
-    // Max Luck (luckLevel 10): ~1 in 120-180 rolls
-    if (demon.isImpossible) {
-      const luckScale = 1 + (upgrades.luckLevel / 10) * 2.3; // Scales from 1.0x at Luck 0 to 3.3x at Luck 10
-      weight *= (32 * luckScale);
-    }
-
-    // Boost top standard AREDL demons slightly when lucky (do NOT apply to top ILL levels)
-    if (!demon.isImpossible && demon.position <= 10) weight *= (1 + (totalLuck - 1) * 0.3);
-
-    weights.push(weight);
-    totalWeight += weight;
+  } else {
+    // Normal AREDL roll only
+    selectedDemon = sampleAredlLevel(allDemons, totalLuck, randPrimary);
   }
 
-  // Fallback in case of all-0 weights (e.g. edge pity filtering)
-  if (totalWeight <= 0) {
-    for (let i = 0; i < pool.length; i++) {
-      weights[i] = 1;
-      totalWeight += 1;
-    }
-  }
-
-  const randomValue = deterministicSeed !== undefined ? deterministicSeed : Math.random();
-  let randomTarget = randomValue * totalWeight;
-
-  let selectedIndex = pool.length - 1;
-  for (let i = 0; i < pool.length; i++) {
-    randomTarget -= weights[i];
-    if (randomTarget <= 0) {
-      selectedIndex = i;
-      break;
-    }
-  }
-
-  const selectedDemon = pool[selectedIndex];
   const effectiveRarity = Math.max(1, Math.round(selectedDemon.baseRarity / totalLuck));
   const keysEarned = calculateKeys(
     selectedDemon.position,
@@ -324,7 +373,7 @@ export function executeRoll(
     selectedDemon.isImpossible,
     upgrades.rebirthCount || 0
   );
-  
+
   const isNewPersonalBest = isHarder(selectedDemon, currentHardest);
   const tier = getDemonTier(selectedDemon.position, selectedDemon.isImpossible);
 

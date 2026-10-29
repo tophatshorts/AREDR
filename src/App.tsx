@@ -1078,7 +1078,8 @@ export default function App() {
           >
             <CS2Spinner
               targetDemon={displayDemon}
-              allDemons={profile.upgrades.luckLevel >= 10 ? [...demons, ...impossibleLevels] : demons}
+              allDemons={demons}
+              impossibleLevels={impossibleLevels}
               isSpinning={isSpinning}
               isQuickRoll={profile.settings.quickRoll}
               quickRollSpeedLevel={profile.upgrades.quickRollSpeedLevel || 0}

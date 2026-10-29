@@ -135,7 +135,7 @@ test('demon levels support level_id, difficulty, verifier, and rating properties
   assert.equal(griefLevel.verifier, 'Doggie');
 });
 
-test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-180 rolls at Max Luck', () => {
+test('ILL levels drop rate scales with luck: ~600 rolls at Base Luck, ~100 rolls at Max Luck', () => {
   // Generate 1644 standard demons
   const standardDemons: DemonLevel[] = [];
   for (let i = 1; i <= 1644; i++) {
@@ -177,7 +177,7 @@ test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-18
   };
 
   let baseIllCount = 0;
-  const simRolls = 10000;
+  const simRolls = 15000;
   for (let roll = 1; roll <= simRolls; roll++) {
     const res = executeRoll(standardDemons, baseUpgrades, 1, null, 0, undefined, illLevels);
     if (res.demon.isImpossible) baseIllCount++;
@@ -188,6 +188,7 @@ test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-18
   const maxUpgrades: PlayerUpgrades = {
     ...baseUpgrades,
     luckLevel: 10,
+    rebirthCount: 3,
   };
 
   let maxIllCount = 0;
@@ -198,7 +199,59 @@ test('ILL levels drop rate scales with luck: ~500-800 rolls at Base Luck, 120-18
   const avgMaxRolls = simRolls / maxIllCount;
 
   // Assertions
-  assert.ok(avgMaxRolls >= 120 && avgMaxRolls <= 180, `Max Luck ILL drop rate should be 120-180 rolls (got 1 in ${Math.round(avgMaxRolls)})`);
+  assert.ok(avgMaxRolls >= 75 && avgMaxRolls <= 130, `Max Luck ILL drop rate should be ~100 rolls (got 1 in ${Math.round(avgMaxRolls)})`);
   assert.ok(avgBaseRolls > avgMaxRolls, `Base luck should be rarer than max luck (got base: 1 in ${Math.round(avgBaseRolls)}, max: 1 in ${Math.round(avgMaxRolls)})`);
 });
+
+test('ILL sub-tier distribution matches target rates (1% Top 1, 10% Top 10, 25% Top 100, 64% 101+)', () => {
+  const illLevels: DemonLevel[] = [];
+  for (let i = 1; i <= 1500; i++) {
+    illLevels.push({
+      id: `ill-${i}`,
+      name: i === 1 ? 'Open Window' : `ILL #${i}`,
+      position: i,
+      baseRarity: calculateIllRarity(i, 1500),
+      isImpossible: true,
+      publisher: 'TestPublisher',
+      verifier: 'TestVerifier',
+      points: 1000,
+    });
+  }
+
+  const upgrades: PlayerUpgrades = {
+    luckLevel: 10,
+    hasQuickRoll: false,
+    hasAutoRoll: false,
+    keysMultiplierLevel: 0,
+    pityTierLevel: 0,
+    streakChargeLevel: 0,
+    rebirthCount: 3,
+  };
+
+  let top1Count = 0;
+  let top10Count = 0;
+  let top100Count = 0;
+  let lowerCount = 0;
+  const samples = 10000;
+
+  for (let i = 0; i < samples; i++) {
+    const res = executeRoll([], upgrades, 1, null, 0, undefined, illLevels, true);
+    const pos = res.demon.position;
+    if (pos === 1) top1Count++;
+    else if (pos <= 10) top10Count++;
+    else if (pos <= 100) top100Count++;
+    else lowerCount++;
+  }
+
+  const top1Ratio = top1Count / samples;
+  const top10Ratio = top10Count / samples;
+  const top100Ratio = top100Count / samples;
+  const lowerRatio = lowerCount / samples;
+
+  assert.ok(top1Ratio >= 0.005 && top1Ratio <= 0.02, `Top 1 should be ~1% (got ${(top1Ratio * 100).toFixed(2)}%)`);
+  assert.ok(top10Ratio >= 0.08 && top10Ratio <= 0.13, `Top 10 should be ~10% (got ${(top10Ratio * 100).toFixed(2)}%)`);
+  assert.ok(top100Ratio >= 0.21 && top100Ratio <= 0.29, `Top 100 should be ~25% (got ${(top100Ratio * 100).toFixed(2)}%)`);
+  assert.ok(lowerRatio >= 0.58 && lowerRatio <= 0.70, `Lower ILL should be ~64% (got ${(lowerRatio * 100).toFixed(2)}%)`);
+});
+
 
