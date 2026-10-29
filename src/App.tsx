@@ -1,3 +1,4 @@
+// Version 2.0.1 - GitHub Sync Trigger
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
