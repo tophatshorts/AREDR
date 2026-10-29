@@ -3,7 +3,7 @@ import { PlayerStats, DemonLevel } from '../game/types';
 import { DemonDifficultyIcon } from './DemonDifficultyIcon';
 import { RatingBadge } from './RatingBadge';
 import { DemonThumbnail } from './DemonThumbnail';
-import { ILL_LEADERBOARD_OFFSET, formatNumber } from '../game/rng';
+import { ILL_LEADERBOARD_OFFSET, formatNumber, calculateDemonRarity, calculateIllRarity } from '../game/rng';
 import { X, Trophy, Search, Flame, BarChart2, BookOpen, Clock, Calendar, CheckCircle, Key } from 'lucide-react';
 
 interface Props {
@@ -150,7 +150,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                           By <span className="text-white font-semibold">{hardest.publisher}</span> • Verified by <span className="text-amber-300 font-semibold">{hardest.verifier}</span>
                         </p>
                         <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
-                          {hardest.points} AREDL Points {hardest.gddl_tier && `• GDDL Tier ${hardest.gddl_tier}`}
+                          {hardest.points} AREDL Points • Base Rarity: 1 in {(hardest.isImpossible ? calculateIllRarity(hardest.position) : calculateDemonRarity(hardest.position)).toLocaleString()}
                         </p>
                         {hardest.tags && hardest.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
@@ -424,7 +424,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                       <div className="flex items-center gap-3 font-mono text-xs">
                         <div className="text-right">
                           <div className="text-zinc-400">
-                            1 in {demon.baseRarity.toLocaleString()}
+                            1 in {(demon.isImpossible ? calculateIllRarity(demon.position) : calculateDemonRarity(demon.position)).toLocaleString()}
                           </div>
                           <div className={isUnlocked ? 'text-emerald-400 font-semibold' : 'text-zinc-600'}>
                             {isUnlocked ? 'Discovered' : 'Locked'}
@@ -485,7 +485,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-zinc-300 font-bold">1 in {r.effectiveRarity.toLocaleString()}</div>
+                        <div className="text-zinc-300 font-bold">1 in {(r.demon.isImpossible ? calculateIllRarity(r.demon.position) : calculateDemonRarity(r.demon.position)).toLocaleString()} (Base)</div>
                         <div className="text-cyan-400 font-bold">+{r.keysEarned} Keys</div>
                       </div>
                     </div>

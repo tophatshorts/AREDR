@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { X, Trophy, Medal, User, Flame, Search } from 'lucide-react';
 import { DemonDifficultyIcon } from './DemonDifficultyIcon';
 import { LeaderboardEntry } from '../game/types';
-import { ILL_LEADERBOARD_OFFSET } from '../game/rng';
+import { ILL_LEADERBOARD_OFFSET, calculateIllRarity, calculateDemonRarity } from '../game/rng';
 
 interface Props {
   onClose: () => void;
@@ -162,7 +162,7 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
 
                   <div className="text-right font-mono">
                     <div className="text-xs font-bold text-zinc-100">
-                      1 in {entry.rarity.toLocaleString()}
+                      1 in {(isIll ? calculateIllRarity(displayRank) : calculateDemonRarity(displayRank)).toLocaleString()}
                     </div>
                     <div className="text-[10px] text-zinc-500">
                       {entry.rollsCount.toLocaleString()} Rolls

@@ -25,6 +25,7 @@ import {
   REBIRTH_TIERS,
   ILL_LEADERBOARD_OFFSET,
   isHarder,
+  calculateIllRarity,
 } from './game/rng';
 import { sound } from './game/sound';
 import { DemonDifficultyIcon } from './components/DemonDifficultyIcon';
@@ -170,7 +171,7 @@ export default function App() {
   const [impossibleLevels, setImpossibleLevels] = useState<DemonLevel[]>(() => {
     return (fallbackImpossibleRaw as any[]).map((d) => ({
       ...d,
-      baseRarity: d.baseRarity || 500000,
+      baseRarity: calculateIllRarity(d.position, fallbackImpossibleRaw.length),
     }));
   });
 
@@ -526,7 +527,11 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.levels) && data.levels.length > 0) {
-            setImpossibleLevels(data.levels);
+            const mapped = data.levels.map((l: any) => ({
+              ...l,
+              baseRarity: calculateIllRarity(l.position, data.levels.length),
+            }));
+            setImpossibleLevels(mapped);
           }
         }
       } catch (e) {
