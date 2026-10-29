@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { X, Trophy, Medal, User, Flame, Search } from 'lucide-react';
 import { DemonDifficultyIcon } from './DemonDifficultyIcon';
 import { LeaderboardEntry } from '../game/types';
+import { ILL_LEADERBOARD_OFFSET } from '../game/rng';
 
 interface Props {
   onClose: () => void;
@@ -119,6 +120,9 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
                   ? 'bg-rose-950/20 border-rose-500/35 shadow-[0_0_15px_rgba(244,63,94,0.1)]'
                   : 'bg-zinc-900/50 border-white/5 hover:border-white/10';
 
+              const isIll = entry.demonPosition < 0;
+              const displayRank = isIll ? Math.abs(entry.demonPosition - ILL_LEADERBOARD_OFFSET) : entry.demonPosition;
+
               return (
                 <div
                   key={entry.id}
@@ -135,7 +139,7 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
                     
                     <div className="flex items-center gap-3">
                       <div className="p-1 rounded-xl bg-zinc-950 border border-white/10">
-                        <DemonDifficultyIcon position={entry.demonPosition} size="sm" />
+                        <DemonDifficultyIcon position={displayRank} isImpossible={isIll} size="sm" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -145,9 +149,9 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
                           )}
                         </div>
                         <div className="text-[11px] text-zinc-400 font-mono">
-                          Rank #{entry.demonPosition}{' '}
+                          {isIll ? `ILL #${displayRank}` : `Rank #${displayRank}`}{' '}
                           <span className={`font-bold ${
-                            entry.demonPosition === 1 ? 'text-amber-300' : entry.demonPosition <= 10 ? 'text-violet-300' : 'text-rose-300'
+                            displayRank === 1 ? 'text-amber-300' : displayRank <= 10 ? 'text-violet-300' : displayRank <= 150 ? 'text-rose-300' : 'text-cyan-300'
                           }`}>
                             {entry.demonName}
                           </span>

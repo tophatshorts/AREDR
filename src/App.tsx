@@ -23,6 +23,7 @@ import {
   QUICK_ROLL_SPEED_LEVELS,
   REBIRTH_COST,
   REBIRTH_TIERS,
+  ILL_LEADERBOARD_OFFSET,
 } from './game/rng';
 import { sound } from './game/sound';
 import { DemonDifficultyIcon } from './components/DemonDifficultyIcon';
@@ -568,7 +569,8 @@ export default function App() {
     const targetDemon = res ? res.demon : currentProf.stats.hardestDemon;
     if (!targetDemon) return;
 
-    const newPosition = Number(targetDemon.position);
+    const isIll = Boolean(targetDemon.isImpossible);
+    const newPosition = isIll ? Number(targetDemon.position) + ILL_LEADERBOARD_OFFSET : Number(targetDemon.position);
     const newRarity = Number(targetDemon.baseRarity || 0);
     const newRolls = Number(res ? res.rollNumber : currentProf.stats.totalRolls);
     const newTimestamp = Number(Date.now());
@@ -999,13 +1001,17 @@ export default function App() {
         {dailyHardest && (
           <div className="mb-5 w-full max-w-xl px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-900/90 to-purple-500/10 border border-white/10 flex items-center justify-between text-xs backdrop-blur-md shadow-md">
             <div className="flex items-center gap-2">
-              <span className="p-1 rounded-md bg-rose-500/20 text-rose-400">
+              <span className={`p-1 rounded-md ${dailyHardest.demonPosition < 0 ? 'bg-purple-500/20 text-purple-400' : 'bg-rose-500/20 text-rose-400'}`}>
                 <Flame className="w-3.5 h-3.5 animate-pulse" />
               </span>
-              <span className="font-semibold text-zinc-300 text-[11px] uppercase tracking-wider">World Hardest</span>
+              <span className="font-semibold text-zinc-300 text-[11px] uppercase tracking-wider">
+                {dailyHardest.demonPosition < 0 ? 'World Impossible' : 'World Hardest'}
+              </span>
             </div>
             <div className="flex items-center gap-2 font-mono text-xs">
-              <span className="font-bold text-amber-400">#{dailyHardest.demonPosition}</span>
+              <span className="font-bold text-amber-400">
+                {dailyHardest.demonPosition < 0 ? `ILL #${Math.abs(dailyHardest.demonPosition - ILL_LEADERBOARD_OFFSET)}` : `#${dailyHardest.demonPosition}`}
+              </span>
               <span className="text-white font-semibold">{dailyHardest.demonName}</span>
               <span className="text-zinc-500 text-[11px]">by</span>
               <span className="text-cyan-300 font-medium">{dailyHardest.username}</span>

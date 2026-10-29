@@ -1,5 +1,7 @@
 import { DemonLevel, DemonTier, PlayerUpgrades, RollResult } from './types';
 
+export const ILL_LEADERBOARD_OFFSET = -10000;
+
 // Rarity calculation: Monotonic mathematical curve from 1 in 100,000 to 1 in 1
 export function calculateDemonRarity(position: number, totalDemons: number = 1644): number {
   if (position <= 1) return 100000; // #1 Grief

@@ -3,7 +3,7 @@ import { PlayerStats, DemonLevel } from '../game/types';
 import { DemonDifficultyIcon } from './DemonDifficultyIcon';
 import { RatingBadge } from './RatingBadge';
 import { DemonThumbnail } from './DemonThumbnail';
-import { formatNumber } from '../game/rng';
+import { ILL_LEADERBOARD_OFFSET, formatNumber } from '../game/rng';
 import { X, Trophy, Search, Flame, BarChart2, BookOpen, Clock, Calendar, CheckCircle, Key } from 'lucide-react';
 
 interface Props {
@@ -188,7 +188,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                 {dailyHardest ? (
                   <div className="text-center md:text-right font-mono">
                     <div className="text-sm font-bold text-amber-400">
-                      #{dailyHardest.demonPosition} {dailyHardest.demonName}
+                      {dailyHardest.demonPosition < 0 ? `ILL #${Math.abs(dailyHardest.demonPosition - ILL_LEADERBOARD_OFFSET)}` : `#${dailyHardest.demonPosition}`} {dailyHardest.demonName}
                     </div>
                     <div className="text-xs text-zinc-400">
                       Held by <span className="text-zinc-100 font-semibold">{dailyHardest.username}</span>
