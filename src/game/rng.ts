@@ -48,11 +48,11 @@ export function calculateKeys(
   let baseKeys = 1; // Base keys reward
   if (isImpossible) {
     if (position <= 1) {
-      baseKeys = 2000000; // Top 1 ILL gives exactly 2 million keys (1/5 of 10M)
+      baseKeys = 10000000; // Top 1 ILL gives exactly 10 million keys!
     } else {
-      // Linear scale from Top 2 (1.5M keys) down to lowest ILL rank (300K keys)
-      const maxKeys = 1500000; // Top 2 ILL (1/5 of 7.5M)
-      const minKeys = 300000; // Lowest ILL level (1/5 of 1.5M)
+      // Linear scale from Top 2 (7.5M keys) down to lowest ILL rank (1.5M keys)
+      const maxKeys = 7500000; // Top 2 ILL
+      const minKeys = 1500000; // Lowest ILL level
       const total = Math.max(2, totalIllLevels || 2097);
       const fraction = (position - 2) / Math.max(1, total - 2);
       baseKeys = Math.round(maxKeys - Math.min(1, Math.max(0, fraction)) * (maxKeys - minKeys));
@@ -169,15 +169,15 @@ export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number =
   };
 }
 
-// Rarity calculation for Impossible Levels (Ensures all ILL are rarer than Grief #1 AREDL)
+// Rarity calculation for Impossible Levels (Entry is 1 in 1M, Top 1 is 1 in 10M)
 export function calculateIllRarity(position: number, total: number = 2097): number {
-  if (position <= 1) return 5000000; // Top 1 Open Window (1 in 5,000,000)
-  if (position <= 10) return Math.round(4500000 - (position - 2) * 200000); // Top 10 ILL (2.7M to 4.5M)
-  if (position <= 50) return Math.round(2500000 - (position - 10) * 45000); // Top 50 ILL (700k to 2.5M)
-  if (position <= 150) return Math.round(700000 - (position - 50) * 4500); // Top 150 ILL (250k to 700k)
-  if (position <= 500) return Math.round(250000 - (position - 150) * 200); // Top 500 ILL (180k to 250k)
-  if (position <= 1000) return Math.round(180000 - (position - 500) * 50); // Top 1,000 ILL (155k to 180k)
-  return Math.max(100001, Math.round(155000 - ((position - 1000) / (total - 1000)) * 54999)); // Lower ILL (100,001 to 155k)
+  if (position <= 1) return 10000000; // Top 1 Open Window (1 in 10,000,000)
+  if (position <= 10) return Math.round(9000000 - (position - 2) * 500000); // Top 10 ILL (~5M to 9M)
+  if (position <= 50) return Math.round(5000000 - (position - 10) * 50000); // Top 50 ILL (3M to 5M)
+  if (position <= 150) return Math.round(3000000 - (position - 50) * 15000); // Top 150 ILL (1.5M to 3M)
+  if (position <= 500) return Math.round(1500000 - (position - 150) * 1000); // Top 500 ILL (1.15M to 1.5M)
+  if (position <= 1000) return Math.round(1150000 - (position - 500) * 150); // Top 1,000 ILL (1.07M to 1.15M)
+  return Math.max(1000000, Math.round(1075000 - ((position - 1000) / (total - 1000)) * 75000)); // Lower ILL (1M to 1.07M)
 }
 
 /**

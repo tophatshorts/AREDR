@@ -1546,8 +1546,8 @@ export default function App() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & Rebalance</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier that scales per tier (T1: 5x, T2: 7.5x, T3: 10x). ILL levels give 80% fewer keys (1/5).</p>
+                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & Rarity Fix</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier (T1: 5x, T2: 7.5x, T3: 10x). ILL rarities balanced for reachability (1/1000 floor). Keys restored to high values.</p>
                 </div>
               </div>
 
