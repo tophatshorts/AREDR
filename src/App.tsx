@@ -1,4 +1,4 @@
-// Version 2.0.6 - GitHub Sync Trigger
+// Version 2.0.9 - Fix Auto-Roll Persistence on Skip
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
@@ -58,6 +58,7 @@ import {
   RotateCcw,
   Crown,
   Settings as SettingsIcon,
+  SkipForward,
 } from 'lucide-react';
 
 import fallbackDemonsRaw from './data/demons.json';
@@ -118,7 +119,14 @@ function normalizeProfile(raw: any): PlayerProfile {
       autoRollStopRankIll: typeof raw?.settings?.autoRollStopRankIll === 'number' ? raw.settings.autoRollStopRankIll : null,
       soundEnabled: raw?.settings?.soundEnabled !== undefined ? Boolean(raw.settings.soundEnabled) : true,
       screenShake: raw?.settings?.screenShake !== undefined ? Boolean(raw.settings.screenShake) : true,
-      autoSkipCutscenes: Boolean(raw?.settings?.autoSkipCutscenes),
+      cutsceneSkipSettings: {
+        aredlTop150: Boolean(raw?.settings?.cutsceneSkipSettings?.aredlTop150),
+        aredlTop10: Boolean(raw?.settings?.cutsceneSkipSettings?.aredlTop10),
+        aredlTop1: Boolean(raw?.settings?.cutsceneSkipSettings?.aredlTop1),
+        illCommon: Boolean(raw?.settings?.cutsceneSkipSettings?.illCommon),
+        illTop10: Boolean(raw?.settings?.cutsceneSkipSettings?.illTop10),
+        illTop1: Boolean(raw?.settings?.cutsceneSkipSettings?.illTop1),
+      },
     },
   };
 }
@@ -727,28 +735,44 @@ export default function App() {
     let cutsceneTypeToTrigger: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | undefined = undefined;
     let markFirstIllSeen = false;
 
-    if (result.demon.isImpossible || result.tier === 'impossible') {
+    const pos = result.demon.position;
+    const isIll = result.demon.isImpossible;
+    let shouldSkip = false;
+
+    if (isIll || result.tier === 'impossible') {
       if (!currentProf.stats.hasSeenFirstILL) {
         cutsceneTypeToTrigger = 'ill-first';
         markFirstIllSeen = true;
-      } else if (result.demon.position === 1) {
+      } else if (pos === 1) {
         cutsceneTypeToTrigger = 'ill-top1';
-      } else if (result.demon.position <= 10) {
+      } else if (pos <= 10) {
         cutsceneTypeToTrigger = 'ill-top10';
-      } else if (result.demon.position <= 100) {
+      } else if (pos <= 100) {
         cutsceneTypeToTrigger = 'ill-top100';
       }
       
-      if (!currentProf.settings.autoSkipCutscenes) {
+      if (cutsceneTypeToTrigger === 'ill-top1') shouldSkip = currentProf.settings.cutsceneSkipSettings.illTop1;
+      else if (cutsceneTypeToTrigger === 'ill-top10') shouldSkip = currentProf.settings.cutsceneSkipSettings.illTop10;
+      else shouldSkip = currentProf.settings.cutsceneSkipSettings.illCommon;
+
+      if (!shouldSkip) {
         setActiveCutscene({ ...result, cutsceneType: cutsceneTypeToTrigger });
         activeCutsceneRef.current = { ...result, cutsceneType: cutsceneTypeToTrigger };
+      } else {
+        sound.playRareChime();
       }
     } else if (result.tier === 'top1' || result.tier === 'top10' || result.tier === 'top150') {
-      if (!currentProf.settings.autoSkipCutscenes) {
+      if (pos === 1) shouldSkip = currentProf.settings.cutsceneSkipSettings.aredlTop1;
+      else if (pos <= 10) shouldSkip = currentProf.settings.cutsceneSkipSettings.aredlTop10;
+      else shouldSkip = currentProf.settings.cutsceneSkipSettings.aredlTop150;
+
+      if (!shouldSkip) {
         setActiveCutscene({ ...result, cutsceneType: 'normal' });
         activeCutsceneRef.current = { ...result, cutsceneType: 'normal' };
+      } else {
+        sound.playRareChime();
       }
-    } else if (result.demon.position <= 500) {
+    } else if (pos <= 500) {
       sound.playRareChime();
     } else {
       sound.playCommonChime();
@@ -805,7 +829,7 @@ export default function App() {
       lastActive: Date.now(),
       settings: {
         ...currentProf.settings,
-        autoRoll: shouldStopAutoRoll ? false : currentProf.settings.autoRoll,
+        autoRoll: (shouldStopAutoRoll && !shouldSkip) ? false : currentProf.settings.autoRoll,
       },
       stats: {
         ...currentProf.stats,
@@ -1559,18 +1583,18 @@ export default function App() {
               </div>
               <div>
                 <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
-                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.6 • Static Deployment Fix</p>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.9 • Auto-Roll Persistence</p>
               </div>
             </div>
 
             <div className="space-y-4 mb-8">
               <div className="flex items-start gap-3">
                 <div className="mt-1 p-1 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                  <Crown className="w-3.5 h-3.5" />
+                  <SkipForward className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Open Window Apex Cinematic</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Top 1 ILL now features a full cinematic video experience just like Grief. Witness the peak of impossibility.</p>
+                  <h4 className="text-sm font-bold text-white">Advanced Skip Controls</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Grief skip fixed! Added "Skip All" and "Watch All" buttons in Settings for instant control over your cinematic experience.</p>
                 </div>
               </div>
 

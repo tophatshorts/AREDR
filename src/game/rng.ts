@@ -1,4 +1,4 @@
-// Version 2.0.4 - GitHub Sync Trigger
+// Version 2.0.8 - GitHub Sync Trigger
 import { DemonLevel, DemonTier, PlayerUpgrades, RollResult } from './types';
 
 export const ILL_LEADERBOARD_OFFSET = -10000;
