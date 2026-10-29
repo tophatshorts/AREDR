@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
+  signInWithRedirect,
+  getRedirectResult,
   signInWithPopup, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  updateProfile 
+  updateProfile,
+  sendEmailVerification,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
-import { Mail, Lock, LogIn, UserPlus, User, ArrowLeft, Sparkles, Flame, Shield, Play } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, User, ArrowLeft, Sparkles, Flame, Shield, Play, CheckCircle } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface Props {
@@ -15,17 +19,18 @@ interface Props {
   topDemons: string[];
 }
 
-type View = 'welcome' | 'login' | 'signup';
+type View = 'welcome' | 'login' | 'signup' | 'verification-pending';
 
 export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, topDemons }) => {
   const [view, setView] = useState<View>('welcome');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [demonIndex, setDemonIndex] = useState(0);
   const [tickerState, setTickerState] = useState<'in' | 'out'>('in');
+  const [lastEmail, setLastEmail] = useState('');
 
   const demonList = topDemons.length > 0 ? topDemons : [
     'Tidal Wave',
@@ -39,6 +44,32 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
     'Firework',
     'Tartarus'
   ];
+
+  // Check for redirect login return on mount (for mobile/tablet redirect login)
+  useEffect(() => {
+    let isMounted = true;
+    
+    try {
+      getRedirectResult(auth)
+        .then((result) => {
+          if (!isMounted) return;
+          if (result && result.user) {
+            // Google users are usually verified immediately by Google
+            sound.playRareChime();
+            onLoginSuccess();
+          }
+        })
+        .catch((err: any) => {
+          if (!isMounted) return;
+          console.warn('Redirect sign-in notice:', err);
+        });
+    } catch (e) {
+      console.warn('getRedirectResult skipped:', e);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [onLoginSuccess]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -60,11 +91,34 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
     setLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
-      sound.playRareChime();
-      onLoginSuccess();
+      // Prefer signInWithPopup for internal AI Studio environment
+      const provider = googleProvider || new GoogleAuthProvider();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        if (result.user) {
+          sound.playRareChime();
+          onLoginSuccess();
+        }
+      } catch (popupErr: any) {
+        console.warn('Popup blocked or failed, trying redirect:', popupErr);
+        await signInWithRedirect(auth, provider);
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google');
+      console.error('Google sign-in error:', err);
+      setError(err.message || 'Failed to sign in with Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!auth.currentUser) return;
+    setLoading(true);
+    try {
+      await sendEmailVerification(auth.currentUser);
+      alert('Verification email resent! Please check your inbox.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend verification email.');
     } finally {
       setLoading(false);
     }
@@ -74,19 +128,62 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    const rawId = identifier.trim();
+    if (!rawId) {
+      setError('Please enter a username or email address');
+      setLoading(false);
+      return;
+    }
+
+    // Convert username to valid email if no @ provided
+    let authEmail = rawId;
+    if (!authEmail.includes('@')) {
+      const sanitized = authEmail.toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+      if (sanitized.length < 3) {
+        setError('Username must be at least 3 characters');
+        setLoading(false);
+        return;
+      }
+      authEmail = `${sanitized}@aredl.game`;
+    }
+
+    setLastEmail(authEmail);
+
     try {
       if (view === 'signup') {
-        if (username.length < 3) throw new Error('Username must be at least 3 characters');
-        const userCred = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCred.user, { displayName: username });
+        const chosenUser = (username.trim() || rawId).slice(0, 32);
+        if (chosenUser.length < 3) throw new Error('Username must be at least 3 characters');
+        
+        const userCred = await createUserWithEmailAndPassword(auth, authEmail, password);
+        await updateProfile(userCred.user, { displayName: chosenUser });
+        
+        // Send verification email
+        try {
+          await sendEmailVerification(userCred.user);
+          setView('verification-pending');
+        } catch (vErr) {
+          console.warn('Email verification send failed:', vErr);
+          // If it fails to send but user was created, we still proceed but warn
+          setError('Account created, but verification email failed to send. You can try signing in.');
+          setView('login');
+        }
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCred = await signInWithEmailAndPassword(auth, authEmail, password);
+        if (!userCred.user.emailVerified && !authEmail.endsWith('@aredl.game')) {
+          setView('verification-pending');
+          return;
+        }
+        sound.playRareChime();
+        onLoginSuccess();
       }
-      sound.playRareChime();
-      onLoginSuccess();
     } catch (err: any) {
       if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password provider is not enabled.');
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError('Account not found or password incorrect.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('That username/email is already taken.');
       } else {
         setError(err.message || 'Authentication failed');
       }
@@ -243,12 +340,13 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
             <div className="relative group">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-cyan-400 transition-colors w-4 h-4" />
               <input
-                type="email"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                placeholder={view === 'signup' ? "Email or Username" : "Username or Email"}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/60 focus:ring-2 focus:ring-cyan-500/20 transition-all font-sans"
                 required
+                autoComplete="username"
               />
             </div>
             <div className="relative group">
@@ -326,4 +424,47 @@ export const LoginPage: React.FC<Props> = ({ onLoginSuccess, onContinueAsGuest, 
       </div>
     </div>
   );
+
+  if (view === 'verification-pending') {
+    return (
+      <div className="min-h-screen bg-[#07080d] flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="w-full max-w-md relative z-10">
+          <div className="bg-zinc-950/85 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-2xl text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-500/40 rounded-full flex items-center justify-center text-emerald-400 animate-bounce">
+                <CheckCircle className="w-8 h-8" />
+              </div>
+            </div>
+            
+            <h1 className="font-display text-2xl font-black text-white uppercase mb-2">Verify Your Email</h1>
+            <p className="text-zinc-400 text-sm mb-8">
+              We've sent a verification link to <span className="text-emerald-400 font-bold">{lastEmail}</span>. 
+              Please click the link in your email to activate your account.
+            </p>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => setView('login')}
+                className="w-full py-3 rounded-xl bg-white text-zinc-950 font-display font-bold text-xs uppercase tracking-wider transition-all transform active:scale-[0.98]"
+              >
+                Go to Sign In
+              </button>
+              
+              <button
+                onClick={handleResendVerification}
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+              >
+                {loading ? 'Sending...' : 'Resend Email'}
+              </button>
+            </div>
+
+            <p className="mt-8 text-[10px] text-zinc-500 uppercase tracking-widest font-mono">
+              Wait a few minutes if you don't see it
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };

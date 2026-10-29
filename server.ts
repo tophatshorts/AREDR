@@ -149,9 +149,46 @@ try {
   console.error('Failed reading demons.json cache:', err);
 }
 
-// Background update from AREDL if available
+// Background update from AREDL & Pointercrate if available
 async function refreshAredlData() {
   try {
+    // 1. Fetch Pointercrate top demon publisher/verifier data
+    const pcMap = new Map<string, { publisher: string; verifier: string }>();
+    try {
+      const [pc1Res, pc2Res] = await Promise.all([
+        fetch('https://pointercrate.com/api/v2/demons/listed?limit=100', { headers: { 'User-Agent': 'GD-Extreme-Demon-RNG/1.0' } }),
+        fetch('https://pointercrate.com/api/v2/demons/listed?limit=100&after=100', { headers: { 'User-Agent': 'GD-Extreme-Demon-RNG/1.0' } })
+      ]);
+      if (pc1Res.ok && pc2Res.ok) {
+        const [d1, d2] = await Promise.all([pc1Res.json(), pc2Res.json()]);
+        const allPc = [...(Array.isArray(d1) ? d1 : []), ...(Array.isArray(d2) ? d2 : [])];
+        for (const item of allPc) {
+          if (item?.name) {
+            pcMap.set(item.name.toLowerCase().trim(), {
+              publisher: item.publisher?.name || 'Unknown',
+              verifier: item.verifier?.name || 'Unknown',
+            });
+          }
+        }
+      }
+    } catch (pcErr) {
+      console.warn('Pointercrate metadata fetch notice:', pcErr);
+    }
+
+    // Community known creator overrides
+    const communityMap: Record<string, { publisher: string; verifier: string }> = {
+      'goldcrest palace': { publisher: 'GrenadeofTacos', verifier: 'GrenadeofTacos' },
+      'bloodbath': { publisher: 'Riot', verifier: 'Riot' },
+      'cataclysm': { publisher: 'Ggb0y', verifier: 'Ggb0y' },
+      'kenos': { publisher: 'ChiefFlurry', verifier: 'Npesta' },
+      'sonic wave': { publisher: 'lSunix', verifier: 'lSunix' },
+      'yatagarasu': { publisher: 'Viprin', verifier: 'Sunix' },
+      'zodiac': { publisher: 'Bianox', verifier: 'Technical' },
+      'tartarus': { publisher: 'Riot', verifier: 'Dolphy' },
+      'kocmoc': { publisher: 'CherryTeam', verifier: 'Doggie' },
+      'limbo': { publisher: 'MindCap', verifier: 'BGram' },
+    };
+
     const res = await fetch('https://api.aredl.net/v2/api/aredl/levels', {
       headers: { 'User-Agent': 'GD-Extreme-Demon-RNG/1.0' },
     });
@@ -167,39 +204,41 @@ async function refreshAredlData() {
             else if (pos <= 150) rating = 'Epic';
             else if (pos <= 500) rating = 'Featured';
 
-            // Extract tags and add custom ones
+            // Extract tags and ensure comprehensive coverage
             const tags = Array.isArray(d.tags) ? [...d.tags] : [];
-            const name = (d.name || '').toLowerCase();
+            const cleanName = (d.name || '').toLowerCase().trim();
             
-            // Add version tags based on common knowledge/ID thresholds if level_id exists
+            // Add version tags based on common knowledge/ID thresholds
             if (d.level_id) {
               const lid = Number(d.level_id);
-              if (lid >= 27000000) tags.push('2.1');
-              else if (lid >= 20000000) tags.push('2.0');
-              else if (lid >= 10000000) tags.push('1.9');
-              else tags.push('Old School');
+              if (lid >= 27000000 && !tags.some(t => t.includes('2.'))) tags.push('2.1');
+              else if (lid >= 20000000 && !tags.some(t => t.includes('2.'))) tags.push('2.0');
+              else if (lid >= 10000000 && !tags.some(t => t.includes('1.'))) tags.push('1.9');
             }
 
             // Style tags
-            if (name.includes('flow') || tags.includes('flow')) tags.push('Flow');
-            if (name.includes('memory') || tags.includes('memory') || name === 'limbo') tags.push('Memory');
-            if (name.includes('learn') || tags.includes('learny') || name.includes('sync')) tags.push('Learny');
-            if (pos <= 150) tags.push('Main List');
-            if (pos > 150 && pos <= 500) tags.push('Extended List');
-            if (pos > 500) tags.push('Legacy');
+            if (cleanName.includes('flow') && !tags.includes('Flow')) tags.push('Flow');
+            if ((cleanName.includes('memory') || cleanName === 'limbo') && !tags.includes('Memory')) tags.push('Memory');
+            if ((cleanName.includes('learn') || cleanName.includes('sync')) && !tags.includes('Learny')) tags.push('Learny');
+            if (pos <= 150 && !tags.includes('Main List')) tags.push('Main List');
+            else if (pos > 150 && pos <= 500 && !tags.includes('Extended List')) tags.push('Extended List');
+            else if (pos > 500 && !tags.includes('Legacy')) tags.push('Legacy');
 
-            // Fix publisher/verifier mapping
-            // Many AREDL levels have publisher as a string or object.
+            // Resolve publisher and verifier
             let publisher = 'Unknown';
-            if (d.publisher) {
+            let verifier = 'Unknown';
+
+            if (communityMap[cleanName]) {
+              publisher = communityMap[cleanName].publisher;
+              verifier = communityMap[cleanName].verifier;
+            } else if (pcMap.has(cleanName)) {
+              const pc = pcMap.get(cleanName)!;
+              publisher = pc.publisher;
+              verifier = pc.verifier;
+            } else if (d.publisher) {
               if (typeof d.publisher === 'string') publisher = d.publisher;
               else if (typeof d.publisher === 'object') publisher = d.publisher.global_name || d.publisher.username || 'Unknown';
-            }
-
-            let verifier = publisher;
-            if (d.verifier) {
-              if (typeof d.verifier === 'string') verifier = d.verifier;
-              else if (typeof d.verifier === 'object') verifier = d.verifier.global_name || d.verifier.username || 'Unknown';
+              verifier = publisher;
             }
 
             return {
@@ -209,7 +248,7 @@ async function refreshAredlData() {
               publisher: publisher,
               verifier: verifier,
               points: d.points || 0,
-              tags: [...new Set(tags)], // Unique tags
+              tags: [...new Set(tags)],
               description: d.description || null,
               level_id: d.level_id || null,
               difficulty: 'Extreme Demon',
@@ -220,13 +259,14 @@ async function refreshAredlData() {
             };
           })
           .sort((a: any, b: any) => a.position - b.position);
+
         fs.mkdirSync(path.join(__dirname, 'src/data'), { recursive: true });
         fs.writeFileSync(DEMONS_CACHE_FILE, JSON.stringify(cachedDemons));
-        console.log(`Successfully refreshed ${cachedDemons.length} demons from AREDL!`);
+        console.log(`Successfully refreshed ${cachedDemons.length} demons from AREDL & Pointercrate!`);
       }
     }
   } catch (err) {
-    // Keep local cache
+    console.warn('AREDL data refresh skipped:', err);
   }
 }
 refreshAredlData();
@@ -236,6 +276,120 @@ app.get('/api/demons', (req, res) => {
   res.json({
     count: cachedDemons.length,
     demons: cachedDemons,
+  });
+});
+
+// --- Impossible Levels List (ILL) Integration ---
+interface ILLLevel {
+  id: number;
+  name: string;
+  creator: string;
+  position: number;
+  fps?: number;
+  videoUrl?: string;
+  levelId?: string;
+  listType?: string;
+}
+
+type ListType = 'ILL' | 'Extended' | 'Legacy';
+
+const ILL_BASE_URL = 'https://api.impossiblelevels.com/api/levels';
+const ILL_CACHE_FILE = path.join(__dirname, 'src/data/impossible_levels.json');
+let cachedImpossibleLevels: any[] = [];
+try {
+  if (fs.existsSync(ILL_CACHE_FILE)) {
+    cachedImpossibleLevels = JSON.parse(fs.readFileSync(ILL_CACHE_FILE, 'utf-8'));
+  }
+} catch (e) {
+  console.warn('Failed reading impossible_levels.json cache:', e);
+}
+
+function cleanCreatorName(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return 'Community';
+  const trimmed = raw.trim();
+  if (
+    !trimmed ||
+    trimmed === '0x00' ||
+    ['unknown', 'n/a', 'none', 'undefined', 'null', 'community'].includes(trimmed.toLowerCase())
+  ) {
+    return 'Community';
+  }
+  return trimmed;
+}
+
+/**
+ * Master function to fetch and clean Impossible Levels List data
+ */
+async function fetchAllLists(): Promise<void> {
+  console.log('Initiating Impossible Levels List data pull...');
+
+  try {
+    const response = await fetch(ILL_BASE_URL, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const data: any[] = await response.json();
+    const rawList = Array.isArray(data) ? data : [];
+    const visible = rawList.filter((d) => d.visible !== false && d.name);
+
+    // Deduplicate by levelId or lowercase level name
+    const seen = new Set<string>();
+    const unique: any[] = [];
+    for (const item of visible) {
+      const key = (item.levelId || item.name).toString().toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(item);
+      }
+    }
+
+    unique.sort((a, b) => (a.rank || 9999) - (b.rank || 9999));
+
+    const formatted: any[] = unique.map((item, idx) => {
+      const pos = idx + 1;
+      const baseRarity = pos === 1 ? 1000000 : Math.max(10, Math.round(980000 - (pos / unique.length) * 900000));
+      return {
+        id: 'ill-' + (item.id || item.levelId || pos),
+        name: item.name,
+        position: pos,
+        publisher: cleanCreatorName(item.uploader || item.creator || item.publisher),
+        verifier: 'Unbeaten (ILL)',
+        points: Math.max(100, Math.round(10000 - (pos / unique.length) * 9900)),
+        level_id: item.levelId ? (Number(item.levelId) || item.levelId) : null,
+        difficulty: 'Impossible Demon',
+        rating: pos === 1 ? 'Mythic' : pos <= 10 ? 'Legendary' : 'Epic',
+        tags: ['ILL', 'Impossible', pos === 1 ? 'Top 1 ILL' : pos <= 10 ? 'Top 10 ILL' : 'ILL List'],
+        description: `Rank #${pos} on the Impossible Levels List. FPS: ${item.fps || 'Physics Breaking'}.`,
+        baseRarity,
+        isImpossible: true,
+        fps: item.fps,
+        videoUrl: item.showcaseLink || item.videoUrl,
+      };
+    });
+
+    cachedImpossibleLevels = formatted;
+    fs.writeFileSync(ILL_CACHE_FILE, JSON.stringify(formatted, null, 2));
+    if (formatted.length > 0) {
+      console.log(`✅ Loaded ${formatted.length} unique ILL levels. Top 1: ${formatted[0].name} by ${formatted[0].publisher}`);
+    }
+  } catch (err) {
+    console.warn('ILL refresh notice:', err);
+  }
+}
+
+// Execute the process
+fetchAllLists();
+
+// API: Get impossible levels list
+app.get('/api/impossible-levels', (req, res) => {
+  res.json({
+    count: cachedImpossibleLevels.length,
+    levels: cachedImpossibleLevels,
   });
 });
 

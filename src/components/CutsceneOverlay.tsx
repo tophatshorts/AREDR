@@ -11,16 +11,31 @@ interface Props {
   demon: DemonLevel;
   rollNumber: number;
   onClose: () => void;
+  cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100';
 }
 
 type CutscenePhase = 'intro' | 'breach' | 'shatter' | 'climax';
 
-export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose }) => {
+export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, cutsceneType }) => {
   const [phase, setPhase] = useState<CutscenePhase>('intro');
   const [pulseCount, setPulseCount] = useState<number>(0);
   const pos = demon.position;
+  const isIll = demon.isImpossible || cutsceneType?.startsWith('ill');
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Compute resolved cutscene type
+  const effectiveCutsceneType = cutsceneType || (
+    isIll
+      ? pos === 1
+        ? 'ill-top1'
+        : pos <= 10
+        ? 'ill-top10'
+        : pos <= 100
+        ? 'ill-top100'
+        : 'ill-first'
+      : 'normal'
+  );
 
   useEffect(() => {
     // Keyboard listener for Space/Escape to skip
@@ -32,7 +47,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    if (pos === 1) {
+    if (pos === 1 && !isIll) {
       sound.playGriefCinematic();
       if (videoRef.current) {
         videoRef.current.muted = true;
@@ -44,18 +59,19 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
       };
-    } else if (pos <= 10) {
+    } else if (isIll || pos <= 10) {
       sound.playTop10Cinematic();
       
       const pInterval = setInterval(() => {
         setPulseCount((c) => c + 1);
       }, 350);
 
-      const t1 = setTimeout(() => setPhase('breach'), 1600);
-      const t2 = setTimeout(() => setPhase('shatter'), 3200);
+      const t1 = setTimeout(() => setPhase('breach'), 1500);
+      const t2 = setTimeout(() => setPhase('shatter'), 3000);
       const t3 = setTimeout(() => {
         setPhase('climax');
-      }, 4800);
+        triggerConfetti(pos === 1);
+      }, 4500);
 
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
@@ -73,7 +89,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
         clearTimeout(t1);
       };
     }
-  }, [pos, onClose]);
+  }, [pos, isIll, onClose]);
 
   const triggerConfetti = (isTop1: boolean) => {
     if (isTop1) {
@@ -109,8 +125,8 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     }
   };
 
-  // 1. TOP 1 GRIEF CUTSCENE (MOBILE FIXED)
-  if (pos === 1) {
+  // 1. TOP 1 GRIEF CUTSCENE (AREDL ONLY - MOBILE FIXED)
+  if (pos === 1 && !isIll) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none">
         <button
@@ -128,6 +144,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
         <video
           ref={videoRef}
           muted
+          autoPlay
           playsInline
           // @ts-ignore
           webkit-playsinline="true"
@@ -153,8 +170,13 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
     );
   }
 
-  // 2. TOP 10 CINEMATIC CUTSCENE
-  if (pos <= 10) {
+  // 2. ILL OR TOP 10 CINEMATIC CUTSCENE
+  if (isIll || pos <= 10) {
+    const isIllTop1 = effectiveCutsceneType === 'ill-top1';
+    const isIllTop10 = effectiveCutsceneType === 'ill-top10';
+    const isIllTop100 = effectiveCutsceneType === 'ill-top100';
+    const isIllFirst = effectiveCutsceneType === 'ill-first';
+
     return (
       <div
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl overflow-hidden select-none"
@@ -171,32 +193,60 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
           <X className="w-3.5 h-3.5" />
         </button>
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22)_0%,rgba(15,23,42,0.6)_45%,rgba(0,0,0,0.98)_80%)] pointer-events-none" />
-        <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#8b5cf6_1px,transparent_1px)] [background-size:24px_24px]" />
+        <div className={`absolute inset-0 pointer-events-none ${
+          isIllTop1
+            ? 'bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.25)_0%,rgba(168,85,247,0.5)_30%,rgba(30,27,75,0.9)_60%,rgba(0,0,0,1)_95%)]'
+            : isIll
+            ? 'bg-[radial-gradient(circle_at_center,rgba(244,63,94,0.3)_0%,rgba(88,28,135,0.7)_40%,rgba(0,0,0,0.98)_85%)]'
+            : 'bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.22)_0%,rgba(15,23,42,0.6)_45%,rgba(0,0,0,0.98)_80%)]'
+        }`} />
+        <div className={`absolute inset-0 opacity-15 pointer-events-none ${
+          isIll ? 'bg-[radial-gradient(#f472b6_1px,transparent_1px)]' : 'bg-[radial-gradient(#8b5cf6_1px,transparent_1px)]'
+        } [background-size:24px_24px]`} />
 
         {phase === 'intro' && (
           <div className="flex flex-col items-center justify-center text-center px-4 max-w-xl animate-in fade-in slide-in-from-top-8 duration-1000">
             <div className="relative mb-8">
-              <div className="w-28 h-28 rounded-full border-2 border-violet-500/30 flex items-center justify-center">
-                <div className="w-20 h-20 rounded-full border-2 border-violet-400/60 animate-ping" />
+              <div className="w-28 h-28 rounded-full border-2 border-purple-500/40 flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full border-2 border-purple-400/80 animate-ping" />
               </div>
-              <Activity className="w-10 h-10 text-violet-400 absolute inset-0 m-auto animate-pulse" />
+              <Activity className="w-10 h-10 text-purple-400 absolute inset-0 m-auto animate-pulse" />
             </div>
 
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-950/80 border border-violet-500/50 text-violet-300 font-mono text-xs uppercase tracking-widest mb-4 shadow-[0_0_20px_rgba(139,92,246,0.4)]">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-950/80 border border-purple-500/50 text-purple-300 font-mono text-xs uppercase tracking-widest mb-4 shadow-[0_0_20px_rgba(168,85,247,0.4)]">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-              <span>DIMENSIONAL ANOMALY DETECTED</span>
+              <span>
+                {isIllTop1
+                  ? 'TRANSCENDENTAL SINGULARITY • TOP 1 ILL'
+                  : isIllFirst
+                  ? 'FIRST IMPOSSIBLE LEVEL DISCOVERED'
+                  : isIllTop10
+                  ? 'TOP 10 IMPOSSIBLE BREACH'
+                  : isIllTop100
+                  ? 'TOP 100 IMPOSSIBLE CLASS DETECTED'
+                  : 'DIMENSIONAL ANOMALY DETECTED'}
+              </span>
             </div>
 
-            <h3 className="text-4xl md:text-5xl font-display font-black text-white tracking-tight uppercase">
-              TOP 10 FREQUENCY
+            <h3 className={`text-4xl md:text-5xl font-display font-black tracking-tight uppercase ${
+              isIllTop1 ? 'text-amber-300 drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]' : 'text-white'
+            }`}>
+              {isIllTop1
+                ? 'OPEN WINDOW APEX'
+                : isIllFirst
+                ? 'FIRST ILL AWAKENING'
+                : isIllTop10
+                ? 'TOP 10 IMPOSSIBLE'
+                : isIllTop100
+                ? 'TOP 100 ILL RIFT'
+                : 'TOP 10 FREQUENCY'}
             </h3>
             
             <div className="mt-6 flex flex-col items-center gap-2">
               <p className="text-zinc-400 font-mono text-xs tracking-wider animate-in fade-in slide-in-from-top-4 duration-700 delay-300">
-                HEARTBEAT FREQUENCY SYNCHRONIZING • BPM 80
+                {isIll ? 'PHYSICS-BREAKING HARMONICS DETECTED • 1440 FPS' : 'HEARTBEAT FREQUENCY SYNCHRONIZING • BPM 80'}
               </p>
-              <p className="text-violet-500 font-mono text-2xl font-bold tracking-[1em] animate-in fade-in slide-in-from-top-6 duration-1000 delay-500">
+              <p className="text-purple-400 font-mono text-2xl font-bold tracking-[1em] animate-in fade-in slide-in-from-top-6 duration-1000 delay-500">
                 ...
               </p>
             </div>
@@ -214,7 +264,11 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
               <div className="h-full bg-gradient-to-r from-violet-500 via-rose-500 to-amber-400 rounded-full animate-pulse transition-all duration-700 w-[88%]" />
             </div>
 
-            <h2 className="text-3xl md:text-5xl font-black font-display text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-rose-300 to-amber-300 tracking-wide uppercase">
+            <h2 className={`text-3xl md:text-5xl font-black font-display tracking-wide uppercase text-transparent bg-clip-text ${
+              isIll 
+                ? 'bg-gradient-to-r from-fuchsia-300 via-rose-300 to-amber-300' 
+                : 'bg-gradient-to-r from-violet-300 via-rose-300 to-amber-300'
+            }`}>
               SEAL COLLAPSING
             </h2>
 
@@ -265,16 +319,40 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose })
               <RatingBadge rating={demon.rating || 'Legendary'} size="md" />
             </div>
 
-            <div className="mt-3 px-5 py-1.5 rounded-full bg-gradient-to-r from-violet-950/90 via-purple-900/90 to-violet-950/90 border border-violet-400/70 text-violet-300 font-bold text-xs md:text-sm tracking-widest uppercase shadow-[0_0_20px_rgba(139,92,246,0.4)]">
-              TOP 10 EXTREME DEMON • RANK #{pos}
+            <div className={`mt-3 px-5 py-1.5 rounded-full border text-xs md:text-sm tracking-widest uppercase font-bold shadow-lg ${
+              isIllTop1
+                ? 'bg-gradient-to-r from-amber-500/30 via-purple-600/40 to-pink-500/30 border-amber-400 text-amber-300 shadow-[0_0_25px_rgba(245,158,11,0.5)]'
+                : isIllFirst
+                ? 'bg-gradient-to-r from-purple-900/90 via-pink-900/90 to-purple-900/90 border-pink-400 text-pink-300 shadow-[0_0_20px_rgba(236,72,153,0.4)]'
+                : isIll
+                ? 'bg-gradient-to-r from-purple-950/90 via-violet-900/90 to-purple-950/90 border-purple-400 text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                : 'bg-gradient-to-r from-violet-950/90 via-purple-900/90 to-violet-950/90 border-violet-400/70 text-violet-300 shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+            }`}>
+              {isIllTop1
+                ? 'TOP 1 IMPOSSIBLE DEMON • APEX SINGULARITY'
+                : isIllFirst
+                ? 'FIRST IMPOSSIBLE DEMON UNLOCKED'
+                : isIllTop10
+                ? `TOP 10 IMPOSSIBLE DEMON • RANK #${pos}`
+                : isIllTop100
+                ? `TOP 100 IMPOSSIBLE DEMON • RANK #${pos}`
+                : `TOP 10 EXTREME DEMON • RANK #${pos}`}
             </div>
 
             <h1 className="mt-3 font-display text-4xl md:text-6xl font-black tracking-tight text-white drop-shadow-[0_0_30px_rgba(168,85,247,0.8)]">
               {demon.name}
             </h1>
 
+            {isIllTop1 && (
+              <div className="mt-2 px-4 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono text-sm font-black flex items-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                <span>👑</span>
+                <span>+5,000,000 DEMON KEYS REWARD</span>
+              </div>
+            )}
+
             <p className="mt-2 text-zinc-300 text-sm max-w-xl font-sans">
               Published by <span className="text-violet-300 font-semibold">{demon.publisher}</span> • Verified by <span className="text-amber-300 font-semibold">{demon.verifier}</span>
+              {demon.fps && <span className="ml-1 text-purple-400 font-mono">({demon.fps} FPS)</span>}
             </p>
             {demon.tags && demon.tags.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">

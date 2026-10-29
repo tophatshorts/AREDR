@@ -8,10 +8,12 @@ import {
   QUICK_ROLL_SPEED_LEVELS,
   QUICK_ROLL_COST,
   AUTO_ROLL_COST,
+  REBIRTH_TIERS,
+  getUpgradeCostMultiplier,
   formatNumber
 } from '../game/rng';
 import { sound } from '../game/sound';
-import { X, Sparkles, Zap, ShieldAlert, Flame, Check, Key, Gauge } from 'lucide-react';
+import { X, Sparkles, Zap, ShieldAlert, Flame, Check, Key, Gauge, RotateCcw, Crown } from 'lucide-react';
 
 interface Props {
   upgrades: PlayerUpgrades;
@@ -23,6 +25,7 @@ interface Props {
   onBuyQuickRoll: (cost: number) => void;
   onUpgradeQuickRollSpeed?: (cost: number) => void;
   onBuyAutoRoll: (cost: number) => void;
+  onRebirth: () => void;
   onClose: () => void;
 }
 
@@ -36,11 +39,18 @@ export const UpgradesModal: React.FC<Props> = ({
   onBuyQuickRoll,
   onUpgradeQuickRollSpeed,
   onBuyAutoRoll,
+  onRebirth,
   onClose,
 }) => {
   const currentKeys = stats.currentKeys;
+  const rebirthCount = upgrades.rebirthCount || 0;
+  const costMult = getUpgradeCostMultiplier(rebirthCount);
 
-  // Next levels
+  // Rebirth Tiers
+  const currentRebirthTier = REBIRTH_TIERS[Math.min(3, rebirthCount)] || REBIRTH_TIERS[0];
+  const nextRebirthTier = REBIRTH_TIERS[rebirthCount + 1];
+
+  // Next levels (with cost scaling)
   const nextLuck = LUCK_LEVELS[upgrades.luckLevel + 1];
   const currentLuck = LUCK_LEVELS[upgrades.luckLevel];
 
@@ -86,9 +96,88 @@ export const UpgradesModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Upgrade Cards List (Vivid Multi-Chromatic Distinct Cards) */}
+        {/* Upgrade Cards List */}
         <div className="mt-5 space-y-3">
-          {/* UPGRADE 1: DEMON LUCK (Emerald / Mint) */}
+          {/* SUPREME UPGRADE: REBIRTH (3 TIERS MAX) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/50 via-zinc-900/80 to-amber-950/40 border-2 border-purple-500/40 hover:border-purple-400/60 transition-all duration-200 shadow-[0_0_25px_rgba(168,85,247,0.15)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-3 rounded-xl bg-purple-500/20 border border-purple-400/40 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)] shrink-0">
+                  <RotateCcw className="w-6 h-6 animate-spin-slow" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display font-black text-base text-white tracking-wide uppercase flex items-center gap-2">
+                      <span>Rebirth</span>
+                      <Crown className="w-4 h-4 text-amber-400 inline" />
+                    </h3>
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono font-bold border border-purple-500/30">
+                      Tier {rebirthCount}/3
+                    </span>
+                    {rebirthCount > 0 && (
+                      <>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                          {currentRebirthTier.luckMult}x Permanent Luck
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/30">
+                          ILL Unlocked
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-300 mt-1 font-sans">
+                    {nextRebirthTier ? (
+                      <>
+                        Rebirth Tier {nextRebirthTier.level}: Resets upgrades, grants <strong className="text-purple-300">{nextRebirthTier.luckMult}x Luck</strong>, <strong className="text-emerald-300">5x Demon Key Boost</strong>, 2,500 starting keys, and{' '}
+                        {nextRebirthTier.level === 1 ? (
+                          <strong className="text-amber-300">Unlocks Lower ILL Levels (Ranks 501+)</strong>
+                        ) : nextRebirthTier.level === 2 ? (
+                          <strong className="text-amber-300">Unlocks Extended ILL Levels (Ranks 51+)</strong>
+                        ) : (
+                          <strong className="text-amber-300">Unlocks Top 50 & Top 1 ILL Levels (All Ranks)</strong>
+                        )}!
+                      </>
+                    ) : (
+                      <>
+                        Max Rebirth Tier Reached! You possess <strong className="text-purple-300">50x Luck</strong>, <strong className="text-emerald-300">5x Demon Key Boost</strong>, and <strong className="text-amber-300">All ILL Levels Unlocked (Top 1 "Open Window")</strong>.
+                      </>
+                    )}
+                  </p>
+                  <div className="mt-2 text-xs font-mono text-zinc-400 flex flex-wrap items-center gap-3">
+                    <span>Rebirth Scale: <span className="text-purple-300 font-bold">Standard Upgrade Costs x{costMult}</span></span>
+                    <span>Starting Keys: <span className="text-amber-300 font-bold">2,500 Keys</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex sm:flex-col items-end gap-2 shrink-0">
+                {nextRebirthTier ? (
+                  <button
+                    onClick={() => {
+                      if (currentKeys >= nextRebirthTier.cost) {
+                        sound.playRareChime();
+                        onRebirth();
+                      }
+                    }}
+                    disabled={currentKeys < nextRebirthTier.cost}
+                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold font-mono tracking-wider transition-all uppercase ${
+                      currentKeys >= nextRebirthTier.cost
+                        ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)] transform hover:scale-105 active:scale-95'
+                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5'
+                    }`}
+                  >
+                    Rebirth T{nextRebirthTier.level} ({formatNumber(nextRebirthTier.cost)})
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-bold text-amber-400 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 font-mono">
+                    <Check className="w-4 h-4" /> MAX REBIRTH
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* UPGRADE 1: DEMON LUCK */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-emerald-500/20 hover:border-emerald-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -101,15 +190,26 @@ export const UpgradesModal: React.FC<Props> = ({
                     <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-300 font-mono border border-emerald-500/30">
                       Lvl {upgrades.luckLevel}/{LUCK_LEVELS.length - 1}
                     </span>
+                    {costMult > 1 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+                        Cost x{costMult}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-zinc-400 mt-1 font-sans">
-                    Multiplies probability of pulling top-ranked extreme demons.
+                    Multiplies probability of pulling top-ranked extreme demons and impossible levels.
                   </p>
                   <div className="mt-2 text-xs font-mono text-zinc-300">
                     Current: <span className="text-emerald-400 font-bold">{currentLuck.mult.toFixed(1)}x Luck</span>
+                    {rebirthCount > 0 ? (
+                      <span className="text-purple-300 font-bold"> ({(currentLuck.mult * currentRebirthTier.luckMult).toFixed(0)}x total)</span>
+                    ) : null}
                     {nextLuck && (
                       <>
                         {' '}→ Next: <span className="text-cyan-300 font-bold">{nextLuck.mult.toFixed(1)}x Luck</span>
+                        {rebirthCount > 0 ? (
+                          <span className="text-amber-300 font-bold"> ({(nextLuck.mult * currentRebirthTier.luckMult).toFixed(0)}x total)</span>
+                        ) : null}
                       </>
                     )}
                   </div>
@@ -119,19 +219,20 @@ export const UpgradesModal: React.FC<Props> = ({
               {nextLuck ? (
                 <button
                   onClick={() => {
-                    if (currentKeys >= nextLuck.cost) {
+                    const scaledCost = nextLuck.cost * costMult;
+                    if (currentKeys >= scaledCost) {
                       sound.playRareChime();
-                      onUpgradeLuck(nextLuck.cost);
+                      onUpgradeLuck(scaledCost);
                     }
                   }}
-                  disabled={currentKeys < nextLuck.cost}
+                  disabled={currentKeys < nextLuck.cost * costMult}
                   className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= nextLuck.cost
+                    currentKeys >= nextLuck.cost * costMult
                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)]'
                       : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                   }`}
                 >
-                  {formatNumber(nextLuck.cost)} Keys
+                  {formatNumber(nextLuck.cost * costMult)} Keys
                 </button>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
@@ -141,7 +242,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* UPGRADE 2: QUICK ROLL MODE (Electric Sky Blue) */}
+          {/* UPGRADE 2: QUICK ROLL MODE */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-sky-500/20 hover:border-sky-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -162,19 +263,20 @@ export const UpgradesModal: React.FC<Props> = ({
               {!upgrades.hasQuickRoll ? (
                 <button
                   onClick={() => {
-                    if (currentKeys >= QUICK_ROLL_COST) {
+                    const scaledCost = QUICK_ROLL_COST * costMult;
+                    if (currentKeys >= scaledCost) {
                       sound.playRareChime();
-                      onBuyQuickRoll(QUICK_ROLL_COST);
+                      onBuyQuickRoll(scaledCost);
                     }
                   }}
-                  disabled={currentKeys < QUICK_ROLL_COST}
+                  disabled={currentKeys < QUICK_ROLL_COST * costMult}
                   className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= QUICK_ROLL_COST
+                    currentKeys >= QUICK_ROLL_COST * costMult
                       ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-[0_0_15px_rgba(14,165,233,0.35)]'
                       : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                   }`}
                 >
-                  {QUICK_ROLL_COST} Keys
+                  {formatNumber(QUICK_ROLL_COST * costMult)} Keys
                 </button>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-sky-400 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
@@ -184,7 +286,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* UPGRADE 2B: QUICK ROLL SPEED / VELOCITY (Amber / Cyan) */}
+          {/* UPGRADE 2B: QUICK ROLL SPEED / VELOCITY */}
           {upgrades.hasQuickRoll && (
             <div className="p-4 rounded-2xl bg-zinc-900/60 border border-amber-500/20 hover:border-amber-500/40 transition-all duration-200">
               <div className="flex items-start justify-between gap-4">
@@ -216,20 +318,20 @@ export const UpgradesModal: React.FC<Props> = ({
                 {QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1] ? (
                   <button
                     onClick={() => {
-                      const nextCost = QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost;
+                      const nextCost = QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost * costMult;
                       if (currentKeys >= nextCost && onUpgradeQuickRollSpeed) {
                         sound.playRareChime();
                         onUpgradeQuickRollSpeed(nextCost);
                       }
                     }}
-                    disabled={currentKeys < QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost}
+                    disabled={currentKeys < QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost * costMult}
                     className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                      currentKeys >= QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost
+                      currentKeys >= QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost * costMult
                         ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.35)]'
                         : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                     }`}
                   >
-                    {formatNumber(QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost)} Keys
+                    {formatNumber(QUICK_ROLL_SPEED_LEVELS[(upgrades.quickRollSpeedLevel || 0) + 1].cost * costMult)} Keys
                   </button>
                 ) : (
                   <span className="flex items-center gap-1 text-xs font-bold text-amber-400 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
@@ -240,7 +342,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* UPGRADE 3: AUTO ROLL (Neon Fuchsia / Violet) */}
+          {/* UPGRADE 3: AUTO ROLL */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-fuchsia-500/20 hover:border-fuchsia-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -261,19 +363,20 @@ export const UpgradesModal: React.FC<Props> = ({
               {!upgrades.hasAutoRoll ? (
                 <button
                   onClick={() => {
-                    if (currentKeys >= AUTO_ROLL_COST) {
+                    const scaledCost = AUTO_ROLL_COST * costMult;
+                    if (currentKeys >= scaledCost) {
                       sound.playRareChime();
-                      onBuyAutoRoll(AUTO_ROLL_COST);
+                      onBuyAutoRoll(scaledCost);
                     }
                   }}
-                  disabled={currentKeys < AUTO_ROLL_COST}
+                  disabled={currentKeys < AUTO_ROLL_COST * costMult}
                   className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= AUTO_ROLL_COST
+                    currentKeys >= AUTO_ROLL_COST * costMult
                       ? 'bg-fuchsia-600 hover:bg-fuchsia-500 text-white shadow-[0_0_15px_rgba(217,70,239,0.35)]'
                       : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                   }`}
                 >
-                  {AUTO_ROLL_COST} Keys
+                  {formatNumber(AUTO_ROLL_COST * costMult)} Keys
                 </button>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-fuchsia-400 px-3 py-1.5 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/30">
@@ -283,7 +386,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* UPGRADE 4: KEY EXTRACTOR (Electric Cyan) */}
+          {/* UPGRADE 4: KEY EXTRACTOR */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -314,19 +417,20 @@ export const UpgradesModal: React.FC<Props> = ({
               {nextKeys ? (
                 <button
                   onClick={() => {
-                    if (currentKeys >= nextKeys.cost) {
+                    const scaledCost = nextKeys.cost * costMult;
+                    if (currentKeys >= scaledCost) {
                       sound.playRareChime();
-                      onUpgradeKeysMult(nextKeys.cost);
+                      onUpgradeKeysMult(scaledCost);
                     }
                   }}
-                  disabled={currentKeys < nextKeys.cost}
+                  disabled={currentKeys < nextKeys.cost * costMult}
                   className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= nextKeys.cost
+                    currentKeys >= nextKeys.cost * costMult
                       ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.35)]'
                       : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                   }`}
                 >
-                  {formatNumber(nextKeys.cost)} Keys
+                  {formatNumber(nextKeys.cost * costMult)} Keys
                 </button>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-cyan-400 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
@@ -336,7 +440,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* UPGRADE 5: PITY SEAL (Cosmic Violet / Indigo) */}
+          {/* UPGRADE 5: PITY SEAL */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-indigo-500/20 hover:border-indigo-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -358,6 +462,11 @@ export const UpgradesModal: React.FC<Props> = ({
                     {nextPity && (
                       <>
                         {' '}→ Next: <span className="text-cyan-300 font-bold">{nextPity.label}</span>
+                        {nextPity.isIll && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40 inline-flex items-center gap-1">
+                            <span>⚡ ILL PITY</span>
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
@@ -365,22 +474,42 @@ export const UpgradesModal: React.FC<Props> = ({
               </div>
 
               {nextPity ? (
-                <button
-                  onClick={() => {
-                    if (currentKeys >= nextPity.cost) {
-                      sound.playRareChime();
-                      onUpgradePity(nextPity.cost);
-                    }
-                  }}
-                  disabled={currentKeys < nextPity.cost}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= nextPity.cost
-                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.35)]'
-                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                  }`}
-                >
-                  {formatNumber(nextPity.cost)} Keys
-                </button>
+                (() => {
+                  const isIllLocked = nextPity.isIll && rebirthCount === 0;
+                  const scaledCost = nextPity.cost * costMult;
+                  const canAfford = currentKeys >= scaledCost;
+                  
+                  if (isIllLocked) {
+                    return (
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Requires Rebirth</span>
+                        <div className="px-3 py-1.5 rounded-xl bg-zinc-800 text-zinc-500 border border-white/5 flex items-center gap-1.5 opacity-60">
+                          <RotateCcw className="w-3 h-3" />
+                          <span className="text-[10px] font-mono font-bold">LOCKED</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      onClick={() => {
+                        if (canAfford) {
+                          sound.playRareChime();
+                          onUpgradePity(scaledCost);
+                        }
+                      }}
+                      disabled={!canAfford}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
+                        canAfford
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.35)]'
+                          : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {formatNumber(scaledCost)} Keys
+                    </button>
+                  );
+                })()
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-indigo-400 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
                   <Check className="w-3.5 h-3.5" /> MAX
@@ -389,7 +518,7 @@ export const UpgradesModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* UPGRADE 6: SURGE REACTOR (Hellfire Rose / Crimson) */}
+          {/* UPGRADE 6: SURGE REACTOR */}
           <div className="p-4 rounded-2xl bg-zinc-900/60 border border-rose-500/20 hover:border-rose-500/40 transition-all duration-200">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -420,19 +549,20 @@ export const UpgradesModal: React.FC<Props> = ({
               {nextStreak ? (
                 <button
                   onClick={() => {
-                    if (currentKeys >= nextStreak.cost) {
+                    const scaledCost = nextStreak.cost * costMult;
+                    if (currentKeys >= scaledCost) {
                       sound.playRareChime();
-                      onUpgradeStreak(nextStreak.cost);
+                      onUpgradeStreak(scaledCost);
                     }
                   }}
-                  disabled={currentKeys < nextStreak.cost}
+                  disabled={currentKeys < nextStreak.cost * costMult}
                   className={`px-4 py-2 rounded-xl text-xs font-bold font-mono tracking-wider transition-all shrink-0 ${
-                    currentKeys >= nextStreak.cost
+                    currentKeys >= nextStreak.cost * costMult
                       ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.35)]'
                       : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                   }`}
                 >
-                  {formatNumber(nextStreak.cost)} Keys
+                  {formatNumber(nextStreak.cost * costMult)} Keys
                 </button>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-bold text-rose-400 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30">

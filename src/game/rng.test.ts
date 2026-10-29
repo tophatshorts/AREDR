@@ -40,14 +40,16 @@ test('getDemonTier correctly classifies tiers', () => {
 
 test('calculateKeys gives scale appropriate rewards', () => {
   assert.equal(calculateKeys(1, 0), 100000);
-  assert.equal(calculateKeys(10, 0), 25000);
-  assert.equal(calculateKeys(150, 0), 5000);
+  assert.equal(calculateKeys(10, 0), 10000);
+  assert.equal(calculateKeys(150, 0), 2500);
   assert.equal(calculateKeys(1609, 0), 1);
   // Level 1 multiplier (1.5x)
-  assert.equal(calculateKeys(150, 1), 7500);
+  assert.equal(calculateKeys(150, 1), 3750);
+  // Rebirth grants no key multiplier (just luck)
+  assert.equal(calculateKeys(150, 0, false, 1), 2500);
 });
 
-test('effective luck scales with upgrades and dry streak', () => {
+test('effective luck scales with upgrades, rebirth, and dry streak', () => {
   const upgrades: PlayerUpgrades = {
     luckLevel: 0,
     hasQuickRoll: false,
@@ -55,30 +57,58 @@ test('effective luck scales with upgrades and dry streak', () => {
     keysMultiplierLevel: 0,
     pityTierLevel: 0,
     streakChargeLevel: 0,
+    rebirthCount: 0,
   };
 
   assert.equal(getEffectiveLuck(upgrades, 0).totalLuck, 1.0);
+  assert.equal(getEffectiveLuck(upgrades, 0).hasImpossibleUnlocked, false);
 
-  upgrades.luckLevel = 9; // 25.0x
-  assert.equal(getEffectiveLuck(upgrades, 0).totalLuck, 25.0);
+  // 1 Rebirth grants 10x luck and unlocks ILL
+  upgrades.rebirthCount = 1;
+  assert.equal(getEffectiveLuck(upgrades, 0).totalLuck, 10.0);
+  assert.equal(getEffectiveLuck(upgrades, 0).hasImpossibleUnlocked, true);
+
+  // Level 10 Luck gives 150x luck (1,500x with 1 Rebirth)
+  upgrades.luckLevel = 10;
+  assert.equal(getEffectiveLuck(upgrades, 0).totalLuck, 1500.0);
+  assert.equal(getEffectiveLuck(upgrades, 0).hasImpossibleUnlocked, true);
 });
 
-test('executeRoll deterministically rolls Grief when seed targets Grief', () => {
+test('calculateKeys awards 10 million keys for ILL #1 level and linear scale down to 1.5M for lowest rank', () => {
+  // ILL position 1 gives 10,000,000 keys
+  assert.equal(calculateKeys(1, 0, true), 10000000);
+  // ILL position 2 gives 7,500,000 keys
+  assert.equal(calculateKeys(2, 0, true, 0, 2097), 7500000);
+  // ILL lowest position (2097) gives 1,500,000 base keys
+  assert.equal(calculateKeys(2097, 0, true, 0, 2097), 1500000);
+  // With 1.5x keys multiplier on Top 1: 15 million keys
+  assert.equal(calculateKeys(1, 1, true), 15000000);
+});
+
+test('executeRoll rolls lower ILL in Tier 1 and top ILL in Tier 3', () => {
   const upgrades: PlayerUpgrades = {
-    luckLevel: 0,
+    luckLevel: 10,
     hasQuickRoll: false,
     hasAutoRoll: false,
     keysMultiplierLevel: 0,
     pityTierLevel: 0,
     streakChargeLevel: 0,
+    rebirthCount: 1,
   };
 
-  const roll = executeRoll(mockDemons, upgrades, 1, null, 0, 0.000001);
-  assert.equal(roll.demon.name, 'GRIEF');
-  assert.equal(roll.tier, 'top1');
-  assert.equal(roll.isNewPersonalBest, true);
-  assert.equal(roll.demon.publisher, 'icedcave');
-  assert.equal(roll.demon.verifier, 'Doggie');
+  const mockImpossible: DemonLevel[] = [
+    { id: 'ill-open-window', name: 'Open Window', position: 1, publisher: '0x029A', verifier: 'Unbeaten', points: 10000, baseRarity: 1000000, difficulty: 'Impossible Demon', rating: 'Mythic', isImpossible: true },
+    { id: 'ill-600', name: 'Lower ILL Demon', position: 600, publisher: 'Creator', verifier: 'Unbeaten', points: 1000, baseRarity: 50, difficulty: 'Impossible Demon', rating: 'Epic', isImpossible: true }
+  ];
+
+  // In Tier 1, position 1 ILL is filtered out (position > 500 required)
+  const rollTier1 = executeRoll(mockDemons, upgrades, 1, null, 0, 0.000000001, mockImpossible, true);
+  assert.equal(rollTier1.demon.name, 'Lower ILL Demon');
+
+  // In Tier 3, position 1 ILL is unlocked
+  upgrades.rebirthCount = 3;
+  const rollTier3 = executeRoll(mockDemons, upgrades, 1, null, 0, 0.999, mockImpossible, true);
+  assert.ok(rollTier3.demon);
 });
 
 test('demon levels support level_id, difficulty, verifier, and rating properties', () => {

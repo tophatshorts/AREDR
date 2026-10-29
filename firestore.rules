@@ -10,6 +10,9 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || (request.auth.token.email != null && request.auth.token.email.matches('.*@aredl\\.game$')));
+    }
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -25,7 +28,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if isOwner(userId) && isValidId(userId) && (request.method != 'write' || isValidUser(request.resource.data));
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidId(userId) && (request.method != 'write' || isValidUser(request.resource.data));
     }
 
     // Leaderboard Validation

@@ -15,12 +15,16 @@ export interface DemonLevel {
   tags?: string[];
   description?: string | null;
   baseRarity: number; // 1 in X
+  isImpossible?: boolean;
+  fps?: number;
+  videoUrl?: string;
 }
 
-export type DemonTier = 'top1' | 'top10' | 'top150' | 'extended' | 'common';
+export type DemonTier = 'top1' | 'top10' | 'top150' | 'extended' | 'common' | 'impossible';
 
 export interface PlayerUpgrades {
-  luckLevel: number; // 0 to 9
+  luckLevel: number; // 0 to 10
+  rebirthCount?: number; // Rebirth level, grants 10x luck per rebirth and resets all upgrades
   hasQuickRoll: boolean; // Buyable upgrade for quick spins
   quickRollSpeedLevel?: number; // 0 to 5 (Upgrades speed of quick rolls)
   hasAutoRoll: boolean; // Buyable upgrade for continuous auto-rolling
@@ -50,12 +54,15 @@ export interface PlayerStats {
   recentRolls: RollResult[];
   sessionHardest: DemonLevel | null;
   streakWithoutTop150: number;
+  hasSeenFirstILL?: boolean;
 }
 
 export interface PlayerSettings {
   autoRoll: boolean; // Toggled by player if unlocked
   quickRoll: boolean; // Toggled by player if unlocked
-  autoRollStopRank: number | null; // Rank to stop at (e.g. stop if roll <= this rank)
+  autoRollStopRank: number | null; // Legacy single rank
+  autoRollStopRankAredl?: number | null; // Stop if AREDL level rank <= this
+  autoRollStopRankIll?: number | null; // Stop if ILL level rank <= this
   soundEnabled: boolean;
   screenShake: boolean;
 }

@@ -9,27 +9,39 @@ import { X, Trophy, Search, Flame, BarChart2, BookOpen, Clock, Calendar, CheckCi
 interface Props {
   stats: PlayerStats;
   allDemons: DemonLevel[];
+  impossibleLevels?: DemonLevel[];
   dailyHardest: { username: string; demonName: string; demonPosition: number } | null;
   onClose: () => void;
   onReplayCutscene?: (demon: DemonLevel) => void;
 }
 
-export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHardest, onClose, onReplayCutscene }) => {
+export const StatTrackerModal: React.FC<Props> = ({
+  stats,
+  allDemons,
+  impossibleLevels = [],
+  dailyHardest,
+  onClose,
+  onReplayCutscene,
+}) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'codex' | 'history'>('overview');
+  const [codexListType, setCodexListType] = useState<'aredl' | 'ill'>('aredl');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTier, setFilterTier] = useState<'all' | 'unlocked' | 'top150' | 'top10'>('all');
 
   const unlockedSet = new Set(stats.unlockedDemonIds);
   const hardest = stats.hardestDemon;
 
+  // Active target pool for codex
+  const activePool = codexListType === 'ill' ? impossibleLevels : allDemons;
+
   // Filter demons for the codex
-  const filteredDemons = allDemons.filter((d) => {
+  const filteredDemons = activePool.filter((d) => {
     const matchesSearch =
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.publisher.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.verifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(d.position).includes(searchQuery) ||
-      (d.tags && d.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
+      (d.tags && d.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
 
     if (!matchesSearch) return false;
 
@@ -227,6 +239,51 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
 
           {activeTab === 'codex' && (
             <div className="space-y-3">
+              {/* Codex List Selector (AREDL vs ILL) */}
+              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-zinc-900/90 border border-white/10">
+                <button
+                  onClick={() => {
+                    setCodexListType('aredl');
+                    setFilterTier('all');
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center justify-center gap-2 ${
+                    codexListType === 'aredl'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  <span>AREDL List ({allDemons.length})</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCodexListType('ill');
+                    setFilterTier('all');
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center justify-center gap-2 ${
+                    codexListType === 'ill'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5 text-purple-400" />
+                  <span>ILL List ({impossibleLevels.length} Impossible)</span>
+                </button>
+              </div>
+
+              {/* Prominent Note: All ILL levels are harder than AREDL */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-zinc-900/60 border border-amber-500/40 flex items-start gap-3 text-xs text-amber-200 shadow-sm">
+                <div className="w-5 h-5 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                  <Flame className="w-3 h-3" />
+                </div>
+                <div className="leading-relaxed">
+                  <strong className="font-black text-amber-300 uppercase tracking-wide">Important Notice:</strong>{' '}
+                  <span className="text-zinc-200">
+                    All ILL (Impossible Levels List) levels are officially classified as harder than all AREDL levels. They feature superhuman precision, micro-clicks, and physics-breaking frame-perfect inputs.
+                  </span>
+                </div>
+              </div>
+
               {/* Search & Filter Toolbar */}
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
@@ -235,7 +292,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search name, creator, verifier, tag (2.1, flow, learny)..."
+                    placeholder={codexListType === 'ill' ? "Search ILL level, creator, verifier, tag..." : "Search name, creator, verifier, tag (2.1, flow, learny)..."}
                     className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-900/80 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
@@ -248,7 +305,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                         : 'bg-zinc-900/60 text-zinc-400 hover:text-white border border-transparent'
                     }`}
                   >
-                    All ({allDemons.length})
+                    All ({activePool.length})
                   </button>
                   <button
                     onClick={() => setFilterTier('unlocked')}
@@ -258,7 +315,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                         : 'bg-zinc-900/60 text-zinc-400 hover:text-white border border-transparent'
                     }`}
                   >
-                    Unlocked ({stats.unlockedDemonIds.length})
+                    Unlocked ({activePool.filter(d => unlockedSet.has(d.id)).length})
                   </button>
                   <button
                     onClick={() => setFilterTier('top150')}
@@ -268,7 +325,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                         : 'bg-zinc-900/60 text-zinc-400 hover:text-white border border-transparent'
                     }`}
                   >
-                    Top 150
+                    {codexListType === 'ill' ? 'Top 100' : 'Top 150'}
                   </button>
                   <button
                     onClick={() => setFilterTier('top10')}
@@ -287,9 +344,14 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
               <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                 {filteredDemons.slice(0, 100).map((demon) => {
                   const isUnlocked = unlockedSet.has(demon.id);
+                  const isIll = demon.isImpossible;
                   const borderClass =
                     !isUnlocked
                       ? 'border-white/5 bg-zinc-950/60 opacity-50'
+                      : isIll
+                      ? demon.position === 1
+                        ? 'border-purple-400/70 bg-purple-950/30 shadow-[0_0_20px_rgba(168,85,247,0.3)]'
+                        : 'border-purple-500/40 bg-purple-950/20'
                       : demon.position === 1
                       ? 'border-amber-500/40 bg-amber-950/20'
                       : demon.position <= 10
@@ -314,24 +376,37 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                             />
                           </div>
                         ) : (
-                          <DemonDifficultyIcon position={demon.position} size="sm" />
+                          <DemonDifficultyIcon position={demon.position} isImpossible={demon.isImpossible} size="sm" />
                         )}
                         <div>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className={`font-mono text-xs font-bold ${
-                              demon.position === 1 ? 'text-amber-400' : demon.position <= 10 ? 'text-violet-400' : demon.position <= 150 ? 'text-rose-400' : 'text-cyan-400'
+                              isIll
+                                ? 'text-purple-300'
+                                : demon.position === 1
+                                ? 'text-amber-400'
+                                : demon.position <= 10
+                                ? 'text-violet-400'
+                                : demon.position <= 150
+                                ? 'text-rose-400'
+                                : 'text-cyan-400'
                             }`}>
-                              #{demon.position}
+                              {isIll ? `ILL #${demon.position}` : `#${demon.position}`}
                             </span>
                             <span className="font-bold text-sm text-zinc-100">
                               {demon.name}
                             </span>
+                            {isIll && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-500/30 border border-purple-400/50 text-purple-200 font-mono font-bold">
+                                IMPOSSIBLE
+                              </span>
+                            )}
                             {isUnlocked && (
                               <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                             )}
                             {demon.tags && demon.tags.length > 0 && (
                               <div className="hidden sm:flex gap-1 ml-1">
-                                {demon.tags.slice(0, 2).map(t => (
+                                {demon.tags.slice(0, 2).map((t) => (
                                   <span key={t} className="px-1.5 py-0.5 rounded bg-zinc-800 text-[9px] text-zinc-500 border border-white/5">
                                     {t}
                                   </span>
@@ -341,6 +416,7 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                           </div>
                           <div className="text-xs text-zinc-400 font-sans">
                             By <span className="text-zinc-200 font-medium">{demon.publisher}</span> • Ver. by <span className="text-amber-300 font-medium">{demon.verifier}</span>
+                            {demon.fps && <span className="ml-1 text-purple-400 font-mono">({demon.fps} FPS)</span>}
                           </div>
                         </div>
                       </div>
@@ -355,17 +431,13 @@ export const StatTrackerModal: React.FC<Props> = ({ stats, allDemons, dailyHarde
                           </div>
                         </div>
 
-                        {demon.position <= 150 && onReplayCutscene && (
+                        {onReplayCutscene && (
                           <button
-                            onClick={() => {
-                              onReplayCutscene(demon);
-                              onClose();
-                            }}
-                            title="Play Cutscene"
-                            className="px-2.5 py-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 font-bold border border-white/10 hover:border-amber-400/50 transition flex items-center gap-1"
+                            onClick={() => onReplayCutscene(demon)}
+                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition"
+                            title="Replay Cutscene"
                           >
-                            <span>▶</span>
-                            <span className="hidden sm:inline">Cutscene</span>
+                            <Trophy className="w-3.5 h-3.5 text-amber-400" />
                           </button>
                         )}
                       </div>

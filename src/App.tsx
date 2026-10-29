@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
 import {
@@ -21,9 +21,12 @@ import {
   QUICK_ROLL_COST,
   AUTO_ROLL_COST,
   QUICK_ROLL_SPEED_LEVELS,
+  REBIRTH_COST,
+  REBIRTH_TIERS,
 } from './game/rng';
 import { sound } from './game/sound';
 import { DemonDifficultyIcon } from './components/DemonDifficultyIcon';
+import { DemonThumbnail, getDemonThumbnailUrl } from './components/DemonThumbnail';
 import { CS2Spinner } from './components/CS2Spinner';
 import { CutsceneOverlay } from './components/CutsceneOverlay';
 import { UpgradesModal } from './components/UpgradesModal';
@@ -46,9 +49,13 @@ import {
   Save,
   Check,
   Cloud,
+  AlertTriangle,
+  RotateCcw,
+  Crown,
 } from 'lucide-react';
 
 import fallbackDemonsRaw from './data/demons.json';
+import fallbackImpossibleRaw from './data/impossible_levels.json';
 
 function sanitizeUsername(name?: string | null): string {
   if (!name) return 'Dasher_' + Math.floor(1000 + Math.random() * 9000);
@@ -72,6 +79,7 @@ function normalizeProfile(raw: any): PlayerProfile {
     avatarIcon: typeof raw.avatarIcon === 'string' ? raw.avatarIcon : 'demon',
     upgrades: {
       luckLevel: typeof raw?.upgrades?.luckLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.luckLevel), LUCK_LEVELS.length - 1) : 0,
+      rebirthCount: typeof raw?.upgrades?.rebirthCount === 'number' ? Math.max(0, raw.upgrades.rebirthCount) : 0,
       hasQuickRoll: Boolean(raw?.upgrades?.hasQuickRoll),
       quickRollSpeedLevel: typeof raw?.upgrades?.quickRollSpeedLevel === 'number' ? Math.min(Math.max(0, raw.upgrades.quickRollSpeedLevel), QUICK_ROLL_SPEED_LEVELS.length - 1) : 0,
       hasAutoRoll: Boolean(raw?.upgrades?.hasAutoRoll),
@@ -95,6 +103,13 @@ function normalizeProfile(raw: any): PlayerProfile {
       autoRoll: Boolean(raw?.settings?.autoRoll),
       quickRoll: Boolean(raw?.settings?.quickRoll),
       autoRollStopRank: typeof raw?.settings?.autoRollStopRank === 'number' ? raw.settings.autoRollStopRank : null,
+      autoRollStopRankAredl:
+        typeof raw?.settings?.autoRollStopRankAredl === 'number'
+          ? raw.settings.autoRollStopRankAredl
+          : typeof raw?.settings?.autoRollStopRank === 'number'
+          ? raw.settings.autoRollStopRank
+          : null,
+      autoRollStopRankIll: typeof raw?.settings?.autoRollStopRankIll === 'number' ? raw.settings.autoRollStopRankIll : null,
       soundEnabled: raw?.settings?.soundEnabled !== undefined ? Boolean(raw.settings.soundEnabled) : true,
       screenShake: raw?.settings?.screenShake !== undefined ? Boolean(raw.settings.screenShake) : true,
     },
@@ -105,6 +120,7 @@ const STORAGE_KEY = 'GD_EXTREME_DEMON_RNG_SAVE_V2';
 
 const DEFAULT_UPGRADES: PlayerUpgrades = {
   luckLevel: 0,
+  rebirthCount: 0,
   hasQuickRoll: false,
   quickRollSpeedLevel: 0,
   hasAutoRoll: false,
@@ -140,15 +156,31 @@ export default function App() {
     return false;
   });
 
-  const [demons, setDemons] = useState<DemonLevel[]>([]);
-  const [isLoadingDemons, setIsLoadingDemons] = useState<boolean>(true);
+  // Pre-populate demons from bundled data instantly so there is zero load lag
+  const [demons, setDemons] = useState<DemonLevel[]>(() => {
+    return (fallbackDemonsRaw as any[]).map((d) => ({
+      ...d,
+      baseRarity: calculateDemonRarity(d.position, fallbackDemonsRaw.length),
+    }));
+  });
+
+  // Pre-populate impossible levels from bundled ILL data
+  const [impossibleLevels, setImpossibleLevels] = useState<DemonLevel[]>(() => {
+    return (fallbackImpossibleRaw as any[]).map((d) => ({
+      ...d,
+      baseRarity: d.baseRarity || 500000,
+    }));
+  });
+
+  const [isLoadingDemons, setIsLoadingDemons] = useState<boolean>(false);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // Active Roll State
   const [pendingRollResult, setPendingRollResult] = useState<RollResult | null>(null);
   const [currentResult, setCurrentResult] = useState<RollResult | null>(null);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
-  const [activeCutscene, setActiveCutscene] = useState<RollResult | null>(null);
+  const [activeCutscene, setActiveCutscene] = useState<(RollResult & { cutsceneType?: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' }) | null>(null);
+
 
   // Save Indicator & Confirmation States
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -176,10 +208,23 @@ export default function App() {
   const saveStatusTimerRef = useRef<NodeJS.Timeout | null>(null);
   const handleRollRef = useRef<() => void>(() => {});
 
-  // Keep profileRef and handleRollRef in sync
+  const isSpinningRef = useRef<boolean>(isSpinning);
+  const pendingRollResultRef = useRef<RollResult | null>(pendingRollResult);
+  const activeCutsceneRef = useRef<any>(activeCutscene);
+  const showLogoutConfirmRef = useRef<boolean>(showLogoutConfirm);
+  const showAutosaveNoticeRef = useRef<boolean>(showAutosaveNotice);
+  const lastAutoRollTimestampRef = useRef<number>(0);
+
+  // Keep state refs in sync
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
+
+  useEffect(() => { isSpinningRef.current = isSpinning; }, [isSpinning]);
+  useEffect(() => { pendingRollResultRef.current = pendingRollResult; }, [pendingRollResult]);
+  useEffect(() => { activeCutsceneRef.current = activeCutscene; }, [activeCutscene]);
+  useEffect(() => { showLogoutConfirmRef.current = showLogoutConfirm; }, [showLogoutConfirm]);
+  useEffect(() => { showAutosaveNoticeRef.current = showAutosaveNotice; }, [showAutosaveNotice]);
 
   useEffect(() => {
     handleRollRef.current = handleRoll;
@@ -201,27 +246,51 @@ export default function App() {
   // Auth Listener
   useEffect(() => {
     let unsubscribe = () => {};
+    // Non-blocking timeout: ensure isAuthLoading never hangs indefinitely on slow network or mobile
+    const safetyTimeout = setTimeout(() => {
+      setIsAuthLoading(false);
+    }, 1200);
+
     try {
       if (auth && typeof auth === 'object' && 'name' in auth) {
+        // Handle redirect login response on mount (mobile/tablet safe)
+        getRedirectResult(auth)
+          .then((cred) => {
+            if (cred?.user) {
+              setUser(cred.user);
+              setIsAuthLoading(false);
+            }
+          })
+          .catch((err) => {
+            console.warn('Redirect result check error:', err);
+          });
+
         unsubscribe = onAuthStateChanged(
           auth,
           (firebaseUser) => {
             setUser(firebaseUser);
             setIsAuthLoading(false);
+            clearTimeout(safetyTimeout);
           },
           (err) => {
             console.warn('Auth listener error:', err);
             setIsAuthLoading(false);
+            clearTimeout(safetyTimeout);
           }
         );
       } else {
         setIsAuthLoading(false);
+        clearTimeout(safetyTimeout);
       }
     } catch (e) {
       console.warn('Firebase Auth failed to attach:', e);
       setIsAuthLoading(false);
+      clearTimeout(safetyTimeout);
     }
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      unsubscribe();
+    };
   }, []);
 
   // Save Profile Helper (Updates localStorage continuously; Cloud sync on manual action only)
@@ -281,6 +350,11 @@ export default function App() {
       }
     }
 
+    // Hydrate local save immediately so app is interactive with zero delay
+    if (localProfile) {
+      setProfile(localProfile);
+    }
+
     try {
       if (isGuest && !user) {
         const activeProfile = localProfile || normalizeProfile({ username: 'Guest_' + Math.floor(1000 + Math.random() * 9000) });
@@ -290,7 +364,7 @@ export default function App() {
       }
 
       if (!user) {
-        setProfile(null);
+        if (!isGuest) setProfile(null);
         return;
       }
 
@@ -443,6 +517,21 @@ export default function App() {
       setIsLoadingDemons(false);
     }
     loadDemons();
+
+    async function loadImpossibleLevels() {
+      try {
+        const res = await fetch('/api/impossible-levels');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.levels) && data.levels.length > 0) {
+            setImpossibleLevels(data.levels);
+          }
+        }
+      } catch (e) {
+        console.warn('Impossible levels API fetch notice:', e);
+      }
+    }
+    loadImpossibleLevels();
   }, []);
 
   // Fetch Daily Hardest with real-time listener (onSnapshot)
@@ -462,14 +551,12 @@ export default function App() {
           }
         },
         (error: any) => {
-          console.error('Daily Hardest onSnapshot error:', error);
-          alert(`Firestore Daily Hardest Error:\n${error instanceof Error ? error.message : String(error)}`);
+          console.warn('Daily Hardest onSnapshot notice:', error);
         }
       );
       return () => unsubscribe();
     } catch (e) {
-      console.error('Daily Hardest setup error:', e);
-      alert(`Firestore Daily Hardest Setup Error:\n${e instanceof Error ? e.message : String(e)}`);
+      console.warn('Daily Hardest setup notice:', e);
     }
   }, []);
 
@@ -516,8 +603,7 @@ export default function App() {
         });
       }
     } catch (e) {
-      console.error('Leaderboard submission error:', e);
-      alert(`Firestore Leaderboard Error:\n${e instanceof Error ? e.message : String(e)}`);
+      console.warn('Leaderboard submission notice:', e);
     }
   }
 
@@ -532,6 +618,49 @@ export default function App() {
     }
   }
 
+  // Perform Rebirth: Resets upgrades, gives permanent luck/keys multipliers, unlocks ILL at Tier 1
+  function handleRebirth() {
+    const current = profileRef.current;
+    if (!current) return;
+    const currentRebirth = current.upgrades.rebirthCount || 0;
+    if (currentRebirth >= 3) return; // Max Tier
+
+    const nextTier = REBIRTH_TIERS[currentRebirth + 1];
+    if (!nextTier || current.stats.currentKeys < nextTier.cost) return;
+
+    const newRebirthCount = currentRebirth + 1;
+    const startingKeys = 2500; // 5x starting keys bonus
+    const updated: PlayerProfile = {
+      ...current,
+      upgrades: {
+        luckLevel: 0,
+        hasQuickRoll: false,
+        quickRollSpeedLevel: 0,
+        hasAutoRoll: false,
+        keysMultiplierLevel: 0,
+        pityTierLevel: 0,
+        streakChargeLevel: 0,
+        rebirthCount: newRebirthCount,
+      },
+      stats: {
+        ...current.stats,
+        currentKeys: startingKeys,
+        streakWithoutTop150: 0,
+      },
+      settings: {
+        ...current.settings,
+        autoRoll: false,
+        quickRoll: false,
+      },
+    };
+
+    setProfile(updated);
+    profileRef.current = updated;
+    saveProfileToStorage(updated, true);
+    setTriggerScreenShake(true);
+    sound.playGriefCinematic();
+  }
+
   // Sync mute state
   useEffect(() => {
     if (profile) sound.setMuted(!profile.settings.soundEnabled);
@@ -540,9 +669,10 @@ export default function App() {
   // Trigger Roll
   function handleRoll() {
     const currentProf = profileRef.current;
-    if (!currentProf || isSpinning || demons.length === 0 || activeCutscene || isRollingRef.current) return;
+    if (!currentProf || isSpinningRef.current || (demons.length === 0 && impossibleLevels.length === 0) || activeCutsceneRef.current || isRollingRef.current) return;
 
     isRollingRef.current = true;
+    isSpinningRef.current = true;
 
     const nextRollNumber = currentProf.stats.totalRolls + 1;
     const currentHardestPos = currentProf.stats.hardestDemon ? currentProf.stats.hardestDemon.position : null;
@@ -552,30 +682,54 @@ export default function App() {
       currentProf.upgrades,
       nextRollNumber,
       currentHardestPos,
-      currentProf.stats.streakWithoutTop150
+      currentProf.stats.streakWithoutTop150,
+      undefined,
+      impossibleLevels,
+      false
     );
 
     setPendingRollResult(result);
+    pendingRollResultRef.current = result;
     setIsSpinning(true);
   }
 
   // Complete Spin
   function handleSpinComplete() {
     isRollingRef.current = false;
+    isSpinningRef.current = false;
     setIsSpinning(false);
 
-    if (!pendingRollResult || !profileRef.current) {
+    if (!pendingRollResultRef.current || !profileRef.current) {
       setPendingRollResult(null);
+      pendingRollResultRef.current = null;
       return;
     }
 
     const currentProf = profileRef.current;
-    const result = pendingRollResult;
+    const result = pendingRollResultRef.current;
     setCurrentResult(result);
     setPendingRollResult(null);
+    pendingRollResultRef.current = null;
 
-    if (result.tier === 'top1' || result.tier === 'top10' || result.tier === 'top150') {
-      setActiveCutscene(result);
+    let cutsceneTypeToTrigger: 'normal' | 'ill-first' | 'ill-top1' | 'ill-top10' | 'ill-top100' | undefined = undefined;
+    let markFirstIllSeen = false;
+
+    if (result.demon.isImpossible || result.tier === 'impossible') {
+      if (!currentProf.stats.hasSeenFirstILL) {
+        cutsceneTypeToTrigger = 'ill-first';
+        markFirstIllSeen = true;
+      } else if (result.demon.position === 1) {
+        cutsceneTypeToTrigger = 'ill-top1';
+      } else if (result.demon.position <= 10) {
+        cutsceneTypeToTrigger = 'ill-top10';
+      } else if (result.demon.position <= 100) {
+        cutsceneTypeToTrigger = 'ill-top100';
+      }
+      setActiveCutscene({ ...result, cutsceneType: cutsceneTypeToTrigger });
+      activeCutsceneRef.current = { ...result, cutsceneType: cutsceneTypeToTrigger };
+    } else if (result.tier === 'top1' || result.tier === 'top10' || result.tier === 'top150') {
+      setActiveCutscene({ ...result, cutsceneType: 'normal' });
+      activeCutsceneRef.current = { ...result, cutsceneType: 'normal' };
     } else if (result.demon.position <= 500) {
       sound.playRareChime();
     } else {
@@ -612,10 +766,19 @@ export default function App() {
     const newStreak = result.demon.position <= 150 ? 0 : currentProf.stats.streakWithoutTop150 + 1;
 
     let shouldStopAutoRoll = false;
-    if (currentProf.settings.autoRoll && currentProf.settings.autoRollStopRank !== null) {
-      if (result.demon.position <= currentProf.settings.autoRollStopRank) {
-        shouldStopAutoRoll = true;
-        sound.playRareChime();
+    if (currentProf.settings.autoRoll) {
+      if (result.demon.isImpossible) {
+        const stopIll = currentProf.settings.autoRollStopRankIll;
+        if (stopIll !== null && stopIll !== undefined && result.demon.position <= stopIll) {
+          shouldStopAutoRoll = true;
+          sound.playRareChime();
+        }
+      } else {
+        const stopAredl = currentProf.settings.autoRollStopRankAredl ?? currentProf.settings.autoRollStopRank;
+        if (stopAredl !== null && stopAredl !== undefined && result.demon.position <= stopAredl) {
+          shouldStopAutoRoll = true;
+          sound.playRareChime();
+        }
       }
     }
 
@@ -638,6 +801,7 @@ export default function App() {
         recentRolls: recent,
         sessionHardest: newSessionHardest,
         streakWithoutTop150: newStreak,
+        hasSeenFirstILL: currentProf.stats.hasSeenFirstILL || markFirstIllSeen,
       },
     };
 
@@ -647,41 +811,42 @@ export default function App() {
     if (isPB) {
       submitToLeaderboard(result);
     }
+
+    // Trigger next Auto Roll immediately if active
+    lastAutoRollTimestampRef.current = 0;
   }
 
-  // Auto Roll Loop with Quick Roll Velocity scaling
+  // High-reliability Auto Roll Ticker Loop
   useEffect(() => {
-    if (!profile?.settings.autoRoll || !profile?.upgrades.hasAutoRoll) {
-      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
-      return;
-    }
+    const interval = setInterval(() => {
+      const currentProf = profileRef.current;
+      if (!currentProf?.settings.autoRoll || !currentProf?.upgrades.hasAutoRoll) {
+        return;
+      }
 
-    if (isSpinning || pendingRollResult || activeCutscene || showLogoutConfirm || showAutosaveNotice) {
-      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
-      return;
-    }
+      if (
+        isSpinningRef.current ||
+        isRollingRef.current ||
+        pendingRollResultRef.current ||
+        activeCutsceneRef.current ||
+        showLogoutConfirmRef.current
+      ) {
+        return;
+      }
 
-    const speedLevel = profile.upgrades.quickRollSpeedLevel || 0;
-    const speedTier = QUICK_ROLL_SPEED_LEVELS[speedLevel] || QUICK_ROLL_SPEED_LEVELS[0];
-    const delayMs = profile.settings.quickRoll ? speedTier.autoDelayMs : 1200;
+      const speedLevel = currentProf.upgrades.quickRollSpeedLevel || 0;
+      const speedTier = QUICK_ROLL_SPEED_LEVELS[speedLevel] || QUICK_ROLL_SPEED_LEVELS[0];
+      const delayMs = currentProf.settings.quickRoll ? speedTier.autoDelayMs : 1200;
 
-    autoRollTimerRef.current = setTimeout(() => {
-      handleRollRef.current();
-    }, delayMs);
+      const now = Date.now();
+      if (now - lastAutoRollTimestampRef.current >= delayMs) {
+        lastAutoRollTimestampRef.current = now;
+        handleRollRef.current();
+      }
+    }, 50);
 
-    return () => {
-      if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
-    };
-  }, [
-    profile?.settings.autoRoll,
-    profile?.settings.quickRoll,
-    profile?.upgrades.hasAutoRoll,
-    profile?.upgrades.quickRollSpeedLevel,
-    isSpinning,
-    pendingRollResult,
-    activeCutscene,
-    showLogoutConfirm,
-  ]);
+    return () => clearInterval(interval);
+  }, []);
 
   if (isAuthLoading) {
     return (
@@ -719,14 +884,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#07080c] text-slate-100 flex flex-col justify-between selection:bg-orange-500 selection:text-white relative overflow-x-hidden">
       {/* Dynamic Atmospheric Backdrop */}
-      {displayDemon && displayDemon.level_id && (
+      {displayDemon && (
         <div className="fixed inset-0 pointer-events-none z-0 opacity-20 filter blur-md transition-opacity duration-1000">
           <img
-            src={`https://raw.githubusercontent.com/All-Rated-Extreme-Demon-List/Thumbnails/main/levels/full/${displayDemon.level_id}.webp`}
+            src={getDemonThumbnailUrl(displayDemon) || 'https://aredl.net/assets/logo.webp'}
             alt=""
             className="w-full h-full object-cover"
             onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
+              (e.target as HTMLImageElement).src = 'https://aredl.net/assets/logo.webp';
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#07080c] via-black/80 to-[#07080c]" />
@@ -735,6 +900,14 @@ export default function App() {
 
       {/* Top Header */}
       <header className="border-b border-white/[0.08] bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-40">
+        {user && !user.emailVerified && !user.email?.endsWith('@aredl.game') && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-4 text-center">
+            <div className="flex items-center justify-center gap-2 text-[10px] sm:text-xs font-medium text-amber-300 uppercase tracking-widest">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Email Not Verified: Please check your inbox to secure your profile</span>
+            </div>
+          </div>
+        )}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <img
@@ -754,6 +927,21 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-2.5">
+            {profile.upgrades.rebirthCount && profile.upgrades.rebirthCount > 0 ? (
+              <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-500/40 text-purple-300 font-mono font-bold text-xs shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Rebirth {profile.upgrades.rebirthCount} (x{profile.upgrades.rebirthCount * 10})</span>
+              </div>
+            ) : null}
+
+
+            {profile.upgrades.luckLevel >= 10 && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-950/60 border border-purple-400/50 text-purple-200 font-mono text-xs font-bold shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span>ILL UNLOCKED</span>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 font-mono font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
               <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
               <span>{formatNumber(profile.stats.currentKeys)}</span>
@@ -834,7 +1022,7 @@ export default function App() {
           >
             <CS2Spinner
               targetDemon={displayDemon}
-              allDemons={demons}
+              allDemons={profile.upgrades.luckLevel >= 10 ? [...demons, ...impossibleLevels] : demons}
               isSpinning={isSpinning}
               isQuickRoll={profile.settings.quickRoll}
               quickRollSpeedLevel={profile.upgrades.quickRollSpeedLevel || 0}
@@ -847,25 +1035,34 @@ export default function App() {
               isSpinning ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
             }`}
           >
-            <div className="relative rounded-3xl border border-white/10 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-2xl min-h-[360px] flex flex-col items-center justify-center p-6 sm:p-8 bg-zinc-950/85">
-              {currentResult && currentResult.demon.level_id ? (
+            <div className={`relative rounded-3xl border overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] backdrop-blur-2xl min-h-[360px] flex flex-col items-center justify-center p-6 sm:p-8 ${
+              currentResult?.demon.isImpossible
+                ? 'bg-zinc-950/90 border-purple-500/50 shadow-[0_0_50px_rgba(168,85,247,0.3)]'
+                : 'bg-zinc-950/85 border-white/10'
+            }`}>
+              {currentResult ? (
                 <>
                   <div className="absolute inset-0 z-0">
                     <img
-                      src={`https://raw.githubusercontent.com/All-Rated-Extreme-Demon-List/Thumbnails/main/levels/full/${currentResult.demon.level_id}.webp`}
+                      src={getDemonThumbnailUrl(currentResult.demon) || 'https://aredl.net/assets/logo.webp'}
                       alt={currentResult.demon.name}
                       className="w-full h-full object-cover opacity-60 filter brightness-90"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://aredl.net/assets/logo.webp';
+                      }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/70 to-zinc-950/40" />
                   </div>
 
                   <div className="relative z-10 w-full flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
                     <div className="flex items-center gap-3">
-                      <DemonDifficultyIcon size="md" />
+                      <DemonDifficultyIcon size="md" isImpossible={currentResult.demon.isImpossible} />
                       <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
                         <span
                           className={`px-3 py-1 rounded-full font-bold uppercase tracking-wider border shadow-sm ${
-                            currentResult.demon.position === 1
+                            currentResult.demon.isImpossible
+                              ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.5)]'
+                              : currentResult.demon.position === 1
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                               : currentResult.demon.position <= 10
                               ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
@@ -874,7 +1071,9 @@ export default function App() {
                               : 'bg-zinc-900/80 text-cyan-300 border-cyan-500/30'
                           }`}
                         >
-                          RANK #{currentResult.demon.position}
+                          {currentResult.demon.isImpossible
+                            ? `ILL #${currentResult.demon.position} IMPOSSIBLE`
+                            : `RANK #${currentResult.demon.position}`}
                         </span>
                         <span className="px-2.5 py-1 rounded-full bg-black/60 border border-white/10 text-zinc-300">
                           1 in {currentResult.effectiveRarity.toLocaleString()}
@@ -882,16 +1081,24 @@ export default function App() {
                       </div>
                     </div>
 
-                    <h2 className="mt-3.5 font-display text-4xl sm:text-5xl font-black text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] tracking-tight">
+                    <h2 className={`mt-3.5 font-display text-4xl sm:text-5xl font-black drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] tracking-tight ${
+                      currentResult.demon.isImpossible
+                        ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-200 via-pink-300 to-amber-200 animate-pulse'
+                        : 'text-white'
+                    }`}>
                       {currentResult.demon.name}
                     </h2>
 
                     {currentResult.demon.tags && currentResult.demon.tags.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+                      <div className="mt-2.5 flex flex-wrap justify-center gap-1.5 max-w-md">
                         {currentResult.demon.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10 text-[10px] font-bold text-zinc-300 uppercase tracking-wider"
+                            className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-sm ${
+                              currentResult.demon.isImpossible
+                                ? 'bg-purple-950/70 border-purple-400/40 text-purple-200'
+                                : 'bg-black/60 border-white/15 text-zinc-200'
+                            }`}
                           >
                             {tag}
                           </span>
@@ -900,39 +1107,42 @@ export default function App() {
                     )}
 
                     <p className="mt-2 text-xs sm:text-sm text-zinc-300 font-medium">
-                      By <span className="text-white font-semibold">{currentResult.demon.publisher}</span> · Verified by{' '}
-                      <span className="text-amber-300 font-semibold">{currentResult.demon.verifier}</span>
+                      {currentResult.demon.publisher && currentResult.demon.publisher !== 'Unknown' ? (
+                        <>
+                          By <span className="text-white font-semibold">{currentResult.demon.publisher}</span>
+                          {currentResult.demon.verifier && currentResult.demon.verifier !== 'Unknown' && (
+                            <>
+                              {' '}· Verified by{' '}
+                              <span className="text-amber-300 font-semibold">{currentResult.demon.verifier}</span>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-zinc-400 font-mono text-xs">
+                          {currentResult.demon.isImpossible
+                            ? 'Impossible Levels List (ILL)'
+                            : `${currentResult.demon.rating || 'Rated'} Extreme Demon · AREDL #${currentResult.demon.position}`}
+                        </span>
+                      )}
                     </p>
+
+                    {currentResult.demon.description && (
+                      <p className="mt-2 text-[11px] sm:text-xs text-zinc-400 max-w-md line-clamp-2 italic px-3 font-sans">
+                        "{currentResult.demon.description}"
+                      </p>
+                    )}
 
                     <div className="mt-5 flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-400/40 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_20px_rgba(6,182,212,0.25)]">
                       <img src="./assets/aistudio/IMG_7942_07b1ead5.png" alt="Keys" className="w-4 h-4 object-contain" />
-                      <span>+{currentResult.keysEarned} Demon Keys</span>
+                      <span>+{formatNumber(currentResult.keysEarned)} Demon Keys</span>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="relative z-10 flex flex-col items-center justify-center w-full h-full text-center py-6">
                   {profile.stats.totalRolls === 0 && !isSpinning ? (
-                    <div className="flex flex-col items-center max-w-sm animate-in fade-in zoom-in-95 duration-500">
-                      <div className="relative mb-6">
-                        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-cyan-500/20 rounded-full blur-2xl" />
-                        <img
-                          src="./assets/aistudio/IMG_7950_e702d8b3.png"
-                          alt="AREDR"
-                          className="relative h-16 w-auto object-contain drop-shadow-[0_8px_25px_rgba(245,158,11,0.4)]"
-                        />
-                      </div>
-
-                      <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-8">
-                        Ready to roll extreme demons?
-                      </p>
-
-                      <button
-                        onClick={handleRoll}
-                        className="group relative px-14 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-400 hover:via-orange-400 hover:to-rose-500 text-white font-display text-2xl font-black uppercase tracking-wider shadow-[0_0_35px_rgba(249,115,22,0.45)] hover:shadow-[0_0_50px_rgba(249,115,22,0.65)] transition-all duration-200 transform hover:scale-[1.03] active:scale-[0.98]"
-                      >
-                        Roll
-                      </button>
+                    <div className="relative z-10 flex flex-col items-center justify-center w-full h-full text-center py-6">
+                      <p className="text-xs text-zinc-500 font-mono tracking-wider">Ready to roll</p>
                     </div>
                   ) : (
                     <p className="text-xs text-zinc-500 font-mono tracking-wider">Ready for next roll</p>
@@ -971,19 +1181,18 @@ export default function App() {
         </div>
 
         {/* Action Controls */}
-        {(profile.stats.totalRolls > 0 || isSpinning || currentResult) && (
-          <div className="mt-5 flex flex-col items-center gap-3.5 w-full max-w-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <button
-              onClick={handleRoll}
-              disabled={isSpinning}
-              className={`w-full py-3.5 px-8 rounded-2xl font-display text-xl font-black tracking-wider uppercase transition-all duration-200 transform active:scale-95 shadow-xl flex items-center justify-center gap-2 ${
-                isSpinning
-                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-400 hover:via-orange-400 hover:to-rose-500 text-white shadow-[0_0_25px_rgba(249,115,22,0.4)] hover:shadow-[0_0_35px_rgba(249,115,22,0.6)]'
-              }`}
-            >
-              {isSpinning ? <span>Spinning...</span> : <span>Roll</span>}
-            </button>
+        <div className="mt-5 flex flex-col items-center gap-3.5 w-full max-w-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <button
+            onClick={handleRoll}
+            disabled={isSpinning}
+            className={`w-full py-3.5 px-8 rounded-2xl font-display text-xl font-black tracking-wider uppercase transition-all duration-200 transform active:scale-95 shadow-xl flex items-center justify-center gap-2 ${
+              isSpinning
+                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-400 hover:via-orange-400 hover:to-rose-500 text-white shadow-[0_0_25px_rgba(249,115,22,0.4)] hover:shadow-[0_0_35px_rgba(249,115,22,0.6)]'
+            }`}
+          >
+            {isSpinning ? <span>Spinning...</span> : <span>Roll</span>}
+          </button>
 
             <div className="flex flex-wrap items-center justify-center gap-2 w-full text-xs font-mono font-semibold">
               <button
@@ -1026,35 +1235,72 @@ export default function App() {
               </button>
 
               {profile.upgrades.hasAutoRoll && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 border border-white/10 text-xs">
-                  <span className="text-zinc-400 text-[11px]">Stop ≤</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="2000"
-                    placeholder="Rank"
-                    value={profile.settings.autoRollStopRank || ''}
-                    onChange={(e) =>
-                      setProfile((p) => {
-                        const updated = {
-                          ...p!,
-                          settings: {
-                            ...p!.settings,
-                            autoRollStopRank: e.target.value === '' ? null : parseInt(e.target.value),
-                          },
-                        };
-                        saveProfileToStorage(updated);
-                        return updated;
-                      })
-                    }
-                    className="w-14 bg-zinc-800/80 border border-white/10 rounded-lg text-amber-300 text-center font-bold text-xs py-0.5 focus:outline-none focus:border-amber-400"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* AREDL Stop Rank */}
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 border border-cyan-500/30 text-xs"
+                    title="Stop Auto Roll if an AREDL level rank is <= this number"
+                  >
+                    <span className="text-cyan-300 font-bold text-[11px] font-mono">AREDL ≤</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1644"
+                      placeholder="Rank"
+                      value={profile.settings.autoRollStopRankAredl ?? profile.settings.autoRollStopRank ?? ''}
+                      onChange={(e) =>
+                        setProfile((p) => {
+                          const val = e.target.value === '' ? null : parseInt(e.target.value);
+                          const updated = {
+                            ...p!,
+                            settings: {
+                              ...p!.settings,
+                              autoRollStopRankAredl: val,
+                              autoRollStopRank: val,
+                            },
+                          };
+                          saveProfileToStorage(updated);
+                          return updated;
+                        })
+                      }
+                      className="w-14 bg-zinc-800/80 border border-cyan-500/30 rounded-lg text-cyan-200 text-center font-bold text-xs py-0.5 focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  {/* ILL Stop Rank */}
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 border border-purple-500/30 text-xs"
+                    title="Stop Auto Roll if an Impossible Level (ILL) rank is <= this number"
+                  >
+                    <span className="text-purple-300 font-bold text-[11px] font-mono">ILL ≤</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="2097"
+                      placeholder="Rank"
+                      value={profile.settings.autoRollStopRankIll ?? ''}
+                      onChange={(e) =>
+                        setProfile((p) => {
+                          const val = e.target.value === '' ? null : parseInt(e.target.value);
+                          const updated = {
+                            ...p!,
+                            settings: {
+                              ...p!.settings,
+                              autoRollStopRankIll: val,
+                            },
+                          };
+                          saveProfileToStorage(updated);
+                          return updated;
+                        })
+                      }
+                      className="w-14 bg-zinc-800/80 border border-purple-500/30 rounded-lg text-purple-200 text-center font-bold text-xs py-0.5 focus:outline-none focus:border-purple-400 font-mono"
+                    />
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        )}
-      </main>
+        </main>
 
       {/* Recent Rolls Footer Strip */}
       <footer className="border-t border-white/[0.08] bg-zinc-950/90 py-2.5 px-4 z-10 flex items-center gap-3 overflow-x-auto text-xs font-mono">
@@ -1096,17 +1342,30 @@ export default function App() {
         <CutsceneOverlay
           demon={activeCutscene.demon}
           rollNumber={activeCutscene.rollNumber}
-          onClose={() => setActiveCutscene(null)}
+          cutsceneType={activeCutscene.cutsceneType}
+          onClose={() => {
+            setActiveCutscene(null);
+            activeCutsceneRef.current = null;
+          }}
         />
       )}
 
-      {showLogoutConfirm && <LogoutConfirmModal onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
+      {showLogoutConfirm && (
+        <LogoutConfirmModal
+          onConfirm={handleLogout}
+          onCancel={() => {
+            setShowLogoutConfirm(false);
+            showLogoutConfirmRef.current = false;
+          }}
+        />
+      )}
 
       {showUpgrades && (
         <UpgradesModal
           upgrades={profile.upgrades}
           stats={profile.stats}
           onClose={() => setShowUpgrades(false)}
+          onRebirth={handleRebirth}
           onUpgradeLuck={(cost) => {
             const current = profileRef.current;
             if (!current) return;
@@ -1196,6 +1455,7 @@ export default function App() {
         <StatTrackerModal
           stats={profile.stats}
           allDemons={demons}
+          impossibleLevels={impossibleLevels}
           dailyHardest={dailyHardest}
           onClose={() => setShowStats(false)}
           onReplayCutscene={(demon) =>
@@ -1206,7 +1466,14 @@ export default function App() {
               timestamp: Date.now(),
               keysEarned: 0,
               isNewPersonalBest: false,
-              tier: 'top150',
+              tier: demon.isImpossible ? 'impossible' : demon.position === 1 ? 'top1' : demon.position <= 10 ? 'top10' : 'top150',
+              cutsceneType: demon.isImpossible
+                ? demon.position === 1
+                  ? 'ill-top1'
+                  : demon.position <= 10
+                  ? 'ill-top10'
+                  : 'ill-top100'
+                : 'normal',
             })
           }
         />
@@ -1243,39 +1510,88 @@ export default function App() {
           onClose={() => setShowProfile(false)}
         />
       )}
-
       {showAutosaveNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-amber-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto border border-amber-500/20">
-              <Sparkles className="w-6 h-6 text-amber-400" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="relative w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-amber-500/50 p-6 sm:p-8 shadow-[0_0_50px_rgba(245,158,11,0.2)]">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+                <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0 • Rebalance & Visuals</p>
+              </div>
             </div>
-            <h3 className="font-display font-bold text-xl text-white">Save Progress Notice</h3>
-            <p className="text-sm text-zinc-300 font-sans leading-relaxed">
-              uh so guys i removed autosave cuz im broke and autosave hits quota limits quick. PLEASE MANUAL SAVE AFTER YOU HIT A BIG MILESTONE OR BEFORE QUITTING. UPDATE: the saving should work, but only after 2PM 28 October 2026. All progress saved locally until 2PM 28 October 2026.
-            </p>
-            <div className="flex items-center justify-center pt-2">
-              <label className="flex items-center gap-2 text-xs text-zinc-300 font-sans cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={dismissNoticeChecked}
-                  onChange={(e) => setDismissNoticeChecked(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500/20 accent-amber-500 cursor-pointer"
-                />
-                <span>Dismiss this prompt everytime?</span>
+
+            <div className="space-y-4 mb-8">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 p-1 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  <Crown className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Open Window Apex</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Top 1 ILL has been renamed to Open Window with a brand new cinematic experience.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-1 p-1 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Zap className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">5x Key Boost & Rebalance</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a permanent 5x Demon Key multiplier. Upgrade costs now scale by 3x per tier.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-1 p-1 rounded-md bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30">
+                  <Shield className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">ILL Visual Overhaul</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Unique gradients and matrix effects added for all Impossible Level pulls and cutscenes.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-1 p-1 rounded-md bg-zinc-500/20 text-zinc-400 border border-zinc-500/30">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Shop progression</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">ILL Pities are now locked behind Rebirth. Admin panel removed for a fairer experience.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={dismissNoticeChecked}
+                    onChange={(e) => setDismissNoticeChecked(e.target.checked)}
+                  />
+                  <div className="w-5 h-5 border-2 border-white/20 rounded-md bg-zinc-900 peer-checked:bg-amber-500 peer-checked:border-amber-400 transition-all" />
+                  <Check className="absolute w-3.5 h-3.5 text-black opacity-0 peer-checked:opacity-100 transition-opacity" />
+                </div>
+                <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors font-sans">Don't show this update notice again</span>
               </label>
+
+              <button
+                onClick={() => {
+                  if (dismissNoticeChecked) {
+                    localStorage.setItem('AREDL_RNG_DISMISS_AUTOSAVE_NOTICE', 'true');
+                  }
+                  setShowAutosaveNotice(false);
+                }}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-display font-bold text-sm tracking-widest uppercase shadow-[0_0_20px_rgba(249,115,22,0.3)] transition transform active:scale-95"
+              >
+                Let's Roll
+              </button>
             </div>
-            <button
-              onClick={() => {
-                if (dismissNoticeChecked) {
-                  localStorage.setItem('AREDL_RNG_DISMISS_AUTOSAVE_NOTICE', 'true');
-                }
-                setShowAutosaveNotice(false);
-              }}
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-950 font-display font-bold rounded-xl transition-all shadow-lg active:scale-95"
-            >
-              I Understand
-            </button>
           </div>
         </div>
       )}
