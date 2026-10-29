@@ -1,4 +1,4 @@
-// Version 2.0.1 - GitHub Sync Trigger
+// Version 2.0.3 - GitHub Sync Trigger
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
@@ -39,6 +39,7 @@ import { LeaderboardModal } from './components/LeaderboardModal';
 import { SaveProfileModal } from './components/SaveProfileModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { LoginPage } from './components/LoginPage';
+import { SettingsModal } from './components/SettingsModal';
 import {
   Zap,
   Trophy,
@@ -56,6 +57,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Crown,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 
 import fallbackDemonsRaw from './data/demons.json';
@@ -116,6 +118,7 @@ function normalizeProfile(raw: any): PlayerProfile {
       autoRollStopRankIll: typeof raw?.settings?.autoRollStopRankIll === 'number' ? raw.settings.autoRollStopRankIll : null,
       soundEnabled: raw?.settings?.soundEnabled !== undefined ? Boolean(raw.settings.soundEnabled) : true,
       screenShake: raw?.settings?.screenShake !== undefined ? Boolean(raw.settings.screenShake) : true,
+      autoSkipCutscenes: Boolean(raw?.settings?.autoSkipCutscenes),
     },
   };
 }
@@ -197,6 +200,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState<boolean>(false);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showAutosaveNotice, setShowAutosaveNotice] = useState<boolean>(false);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
   const [dismissNoticeChecked, setDismissNoticeChecked] = useState<boolean>(false);
   const [triggerScreenShake, setTriggerScreenShake] = useState<boolean>(false);
 
@@ -734,11 +738,16 @@ export default function App() {
       } else if (result.demon.position <= 100) {
         cutsceneTypeToTrigger = 'ill-top100';
       }
-      setActiveCutscene({ ...result, cutsceneType: cutsceneTypeToTrigger });
-      activeCutsceneRef.current = { ...result, cutsceneType: cutsceneTypeToTrigger };
+      
+      if (!currentProf.settings.autoSkipCutscenes) {
+        setActiveCutscene({ ...result, cutsceneType: cutsceneTypeToTrigger });
+        activeCutsceneRef.current = { ...result, cutsceneType: cutsceneTypeToTrigger };
+      }
     } else if (result.tier === 'top1' || result.tier === 'top10' || result.tier === 'top150') {
-      setActiveCutscene({ ...result, cutsceneType: 'normal' });
-      activeCutsceneRef.current = { ...result, cutsceneType: 'normal' };
+      if (!currentProf.settings.autoSkipCutscenes) {
+        setActiveCutscene({ ...result, cutsceneType: 'normal' });
+        activeCutsceneRef.current = { ...result, cutsceneType: 'normal' };
+      }
     } else if (result.demon.position <= 500) {
       sound.playRareChime();
     } else {
@@ -983,6 +992,13 @@ export default function App() {
               className="p-2 rounded-xl bg-zinc-900/80 hover:bg-sky-500/15 border border-white/10 hover:border-sky-500/40 text-sky-400 hover:text-sky-300 transition-all duration-200 shadow-sm"
             >
               <UserIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              title="Game Settings"
+              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-500/15 border border-white/10 hover:border-zinc-500/40 text-zinc-400 hover:text-zinc-200 transition-all duration-200 shadow-sm"
+            >
+              <SettingsIcon className="w-4 h-4" />
             </button>
             <button
               onClick={handleManualSave}
@@ -1523,6 +1539,17 @@ export default function App() {
           onClose={() => setShowProfile(false)}
         />
       )}
+      {showSettings && (
+        <SettingsModal
+          settings={profile.settings}
+          onUpdateSettings={(s) => {
+            const next = { ...profile, settings: { ...profile.settings, ...s } };
+            setProfile(next);
+            saveProfileToStorage(next, true);
+          }}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
       {showAutosaveNotice && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
           <div className="relative w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-amber-500/50 p-6 sm:p-8 shadow-[0_0_50px_rgba(245,158,11,0.2)]">
@@ -1532,7 +1559,7 @@ export default function App() {
               </div>
               <div>
                 <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase">New Update!</h2>
-                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0 • Rebalance & Visuals</p>
+                <p className="text-xs text-amber-400/80 font-mono font-bold tracking-widest uppercase">Version 2.0.3 • Cinematic Apex</p>
               </div>
             </div>
 
@@ -1542,8 +1569,8 @@ export default function App() {
                   <Crown className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Open Window Apex</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Top 1 ILL has been renamed to Open Window with a brand new cinematic experience.</p>
+                  <h4 className="text-sm font-bold text-white">Open Window Apex Cinematic</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Top 1 ILL now features a full cinematic video experience just like Grief. Witness the peak of impossibility.</p>
                 </div>
               </div>
 
@@ -1552,8 +1579,8 @@ export default function App() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & Rarity Fix</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier (T1: 5x, T2: 7.5x, T3: 10x). ILL rarities balanced for reachability (1/1000 floor). Keys restored to high values.</p>
+                  <h4 className="text-sm font-bold text-white">Scaling Key Boost & ILL 10x Luck</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">Rebirthing now grants a Demon Key multiplier (T1: 5x, T2: 7.5x, T3: 10x). ILL levels are now 10x more likely to roll while keeping their legendary status!</p>
                 </div>
               </div>
 
@@ -1572,8 +1599,8 @@ export default function App() {
                   <RotateCcw className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Shop progression</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">ILL Pities are now locked behind Rebirth. Admin panel removed for a fairer experience.</p>
+                  <h4 className="text-sm font-bold text-white">Settings & Quality of Life</h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">New Settings menu added! Toggle Sound, Screen Shake, and a new Auto-Skip Cutscenes option for faster rolling.</p>
                 </div>
               </div>
             </div>

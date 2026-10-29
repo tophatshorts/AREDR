@@ -65,6 +65,7 @@ export interface PlayerSettings {
   autoRollStopRankIll?: number | null; // Stop if ILL level rank <= this
   soundEnabled: boolean;
   screenShake: boolean;
+  autoSkipCutscenes: boolean;
 }
 
 export interface PlayerProfile {
