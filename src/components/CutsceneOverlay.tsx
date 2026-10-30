@@ -47,13 +47,13 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    if (pos === 1 && !isIll) {
+    if ((isIll && pos <= 3) || (!isIll && pos === 1)) {
       sound.playGriefCinematic();
       if (videoRef.current) {
         videoRef.current.muted = true;
         videoRef.current.play().catch((err) => {
-          console.warn("Mobile autoplay prevented:", err);
-          onClose();
+          console.warn("Mobile autoplay notice:", err);
+          // Allow fallback or user click if blocked
         });
       }
       return () => {
@@ -125,11 +125,18 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
     }
   };
 
-  // 1. TOP 1 GRIEF OR OPEN WINDOW APEX CUTSCENE (MOBILE FIXED)
-  if (pos === 1) {
-    const videoSrc = isIll 
-      ? `${import.meta.env.BASE_URL || ''}assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mov`
-      : `${import.meta.env.BASE_URL || ''}assets/videos/grief_cutscene.mp4`;
+  // 1. TOP VIDEO CUTSCENES (#0 Stereo Madness, #1 Open Window / Grief, #2 Vortex Crush, #3 Crush)
+  if ((isIll && pos <= 3) || (!isIll && pos === 1)) {
+    let videoSrc = '';
+    const baseUrl = import.meta.env.BASE_URL || '';
+    if (isIll) {
+      if (pos === 0) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-17-09_1_455669a7.mp4`;
+      else if (pos === 1) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mp4`;
+      else if (pos === 2) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-21-40_1_200f7903.mp4`;
+      else if (pos === 3) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-22-39_1_1c312453.mp4`;
+    } else {
+      videoSrc = `${baseUrl}assets/videos/grief_cutscene.mp4`;
+    }
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none">
@@ -147,16 +154,19 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
 
         <video
           ref={videoRef}
+          src={videoSrc}
           muted
           autoPlay
           playsInline
           // @ts-ignore
           webkit-playsinline="true"
+          // @ts-ignore
+          x5-playsinline="true"
           preload="auto"
+          crossOrigin="anonymous"
           className="w-full h-full object-cover"
           onError={(e) => {
-            console.error("Video failed to load:", e.currentTarget.error);
-            onClose();
+            console.warn("Video notice:", e.currentTarget.error);
           }}
           onEnded={() => {
             sound.playSFX('shatter');
@@ -167,9 +177,7 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
             }
             onClose();
           }}
-        >
-          <source src={videoSrc} />
-        </video>
+        />
       </div>
     );
   }

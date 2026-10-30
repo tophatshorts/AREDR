@@ -372,10 +372,31 @@ async function fetchAllLists(): Promise<void> {
       };
     });
 
+    const secretStereoMadness = {
+      id: "ill-0",
+      name: "Stereo Madness",
+      position: 0,
+      publisher: "RobTop",
+      verifier: "RobTop",
+      points: 20000,
+      level_id: 128,
+      difficulty: "Secret / Impossible Demon",
+      rating: "Mythic",
+      tags: ["ILL", "Secret Tier", "Top 0 ILL", "6969 FPS"],
+      description: "Secret #0 on the Impossible Levels List. FPS: 6969.",
+      baseRarity: 10000001,
+      isImpossible: true,
+      fps: 6969
+    };
+
+    if (!formatted.some(l => l.position === 0)) {
+      formatted.unshift(secretStereoMadness);
+    }
+
     cachedImpossibleLevels = formatted;
     fs.writeFileSync(ILL_CACHE_FILE, JSON.stringify(formatted, null, 2));
     if (formatted.length > 0) {
-      console.log(`✅ Loaded ${formatted.length} unique ILL levels. Top 1: ${formatted[0].name} by ${formatted[0].publisher}`);
+      console.log(`✅ Loaded ${formatted.length} unique ILL levels. Top 0: ${formatted[0].name} by ${formatted[0].publisher}`);
     }
   } catch (err) {
     console.warn('ILL refresh notice:', err);

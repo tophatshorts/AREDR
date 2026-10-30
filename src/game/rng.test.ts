@@ -75,8 +75,11 @@ test('effective luck scales with upgrades, rebirth, and dry streak', () => {
   assert.equal(getEffectiveLuck(upgrades, 0).hasImpossibleUnlocked, true);
 });
 
-test('calculateKeys awards 10 million keys for ILL #1 level and linear scale down to 1.5M for lowest rank', () => {
-  // ILL position 1 gives 10,000,000 keys
+test('calculateKeys awards fixed 69.69M keys for Stereo Madness #0 and 10M keys for ILL #1', () => {
+  // ILL position 0 gives fixed 69,690,000 keys regardless of multipliers or rebirth
+  assert.equal(calculateKeys(0, 0, true, 0), 69690000);
+  assert.equal(calculateKeys(0, 5, true, 3), 69690000);
+  // ILL position 1 gives 10,000,000 base keys
   assert.equal(calculateKeys(1, 0, true), 10000000);
   // ILL position 2 gives 7,500,000 keys
   assert.equal(calculateKeys(2, 0, true, 0, 2097), 7500000);
@@ -203,8 +206,19 @@ test('ILL levels drop rate scales with luck: ~600 rolls at Base Luck, ~100 rolls
   assert.ok(avgBaseRolls > avgMaxRolls, `Base luck should be rarer than max luck (got base: 1 in ${Math.round(avgBaseRolls)}, max: 1 in ${Math.round(avgMaxRolls)})`);
 });
 
-test('ILL sub-tier distribution matches target rates (2% Top 1 [2x buffed], 10% Top 10, 25% Top 100, 63% 101+)', () => {
-  const illLevels: DemonLevel[] = [];
+test('ILL sub-tier distribution matches target rates (1% Secret #0, 2% Top 1, 10% Top 10, 25% Top 100, 62% 101+)', () => {
+  const illLevels: DemonLevel[] = [
+    {
+      id: 'ill-0',
+      name: 'Stereo Madness',
+      position: 0,
+      baseRarity: calculateIllRarity(0, 1500),
+      isImpossible: true,
+      publisher: 'RobTop',
+      verifier: 'RobTop',
+      points: 20000,
+    }
+  ];
   for (let i = 1; i <= 1500; i++) {
     illLevels.push({
       id: `ill-${i}`,
@@ -228,6 +242,7 @@ test('ILL sub-tier distribution matches target rates (2% Top 1 [2x buffed], 10% 
     rebirthCount: 3,
   };
 
+  let top0Count = 0;
   let top1Count = 0;
   let top10Count = 0;
   let top100Count = 0;
@@ -237,21 +252,24 @@ test('ILL sub-tier distribution matches target rates (2% Top 1 [2x buffed], 10% 
   for (let i = 0; i < samples; i++) {
     const res = executeRoll([], upgrades, 1, null, 0, undefined, illLevels, true);
     const pos = res.demon.position;
-    if (pos === 1) top1Count++;
+    if (pos === 0) top0Count++;
+    else if (pos === 1) top1Count++;
     else if (pos <= 10) top10Count++;
     else if (pos <= 100) top100Count++;
     else lowerCount++;
   }
 
+  const top0Ratio = top0Count / samples;
   const top1Ratio = top1Count / samples;
   const top10Ratio = top10Count / samples;
   const top100Ratio = top100Count / samples;
   const lowerRatio = lowerCount / samples;
 
+  assert.ok(top0Ratio >= 0.004 && top0Ratio <= 0.02, `Top 0 Secret should be ~1% (got ${(top0Ratio * 100).toFixed(2)}%)`);
   assert.ok(top1Ratio >= 0.012 && top1Ratio <= 0.032, `Top 1 should be ~2% (got ${(top1Ratio * 100).toFixed(2)}%)`);
-  assert.ok(top10Ratio >= 0.08 && top10Ratio <= 0.13, `Top 10 should be ~10% (got ${(top100Ratio * 100).toFixed(2)}%)`);
+  assert.ok(top10Ratio >= 0.08 && top10Ratio <= 0.13, `Top 10 should be ~10% (got ${(top10Ratio * 100).toFixed(2)}%)`);
   assert.ok(top100Ratio >= 0.21 && top100Ratio <= 0.29, `Top 100 should be ~25% (got ${(top100Ratio * 100).toFixed(2)}%)`);
-  assert.ok(lowerRatio >= 0.55 && lowerRatio <= 0.70, `Lower ILL should be ~63% (got ${(lowerRatio * 100).toFixed(2)}%)`);
+  assert.ok(lowerRatio >= 0.55 && lowerRatio <= 0.70, `Lower ILL should be ~62% (got ${(lowerRatio * 100).toFixed(2)}%)`);
 });
 
 

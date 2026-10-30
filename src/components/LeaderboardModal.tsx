@@ -151,9 +151,9 @@ export const LeaderboardModal: React.FC<Props> = ({ onClose }) => {
                         <div className="text-[11px] text-zinc-400 font-mono">
                           {isIll ? `ILL #${displayRank}` : `Rank #${displayRank}`}{' '}
                           <span className={`font-bold ${
-                            displayRank === 1 ? 'text-amber-300' : displayRank <= 10 ? 'text-violet-300' : displayRank <= 150 ? 'text-rose-300' : 'text-cyan-300'
+                            displayRank === 0 ? 'text-cyan-300 animate-pulse' : displayRank === 1 ? 'text-amber-300' : displayRank <= 10 ? 'text-violet-300' : displayRank <= 150 ? 'text-rose-300' : 'text-cyan-300'
                           }`}>
-                            {entry.demonName}
+                            {displayRank === 0 && isIll ? 'Stereo Madness…?' : entry.demonName}
                           </span>
                         </div>
                       </div>

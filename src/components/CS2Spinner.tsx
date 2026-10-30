@@ -412,7 +412,10 @@ export const CS2Spinner: React.FC<Props> = ({
             cardStyle =
               'bg-gradient-to-br from-purple-950 via-fuchsia-950 to-purple-950 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_22px_rgba(217,70,239,0.8)] animate-pulse';
           } else if (isIll) {
-            if (pos === 1) {
+            if (pos <= 0) {
+              cardStyle =
+                'bg-gradient-to-br from-cyan-950 via-fuchsia-950 to-purple-950 border-cyan-300 text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.9)] animate-pulse';
+            } else if (pos === 1) {
               cardStyle =
                 'bg-gradient-to-b from-amber-900 via-yellow-950 to-zinc-950 border-amber-300 text-amber-200 shadow-[0_0_28px_rgba(252,211,77,0.85)]';
             } else if (pos <= 10) {
@@ -449,7 +452,7 @@ export const CS2Spinner: React.FC<Props> = ({
                 {c.isIllSpot ? '⚡ ILL ⚡' : `#${c.rank}`}
               </span>
               <span className="text-[10px] font-bold tracking-wider max-w-[105px] truncate mt-1">
-                {c.demon.name}
+                {c.rank <= 0 && isIll && !c.isIllSpot ? '???' : c.demon.name}
               </span>
             </div>
           );

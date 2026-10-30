@@ -46,6 +46,10 @@ export function calculateKeys(
   rebirthCount: number = 0,
   totalIllLevels: number = 2097
 ): number {
+  if (isImpossible && position <= 0) {
+    return 69690000; // Fixed 69.69M keys for Stereo Madness (#0), unaffected by boosts or rebirth
+  }
+
   let baseKeys = 1; // Base keys reward
   if (isImpossible) {
     if (position <= 1) {
@@ -72,7 +76,6 @@ export function calculateKeys(
   let finalKeys = Math.round(baseKeys * mult);
 
   // Rebirth Bonus: Tiered multipliers
-  // T1: 5x, T2: 7.5x, T3: 10x
   if (rebirthCount > 0) {
     let rebirthKeyMult = 1;
     if (rebirthCount === 1) rebirthKeyMult = 5;
@@ -175,8 +178,9 @@ export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number =
   };
 }
 
-// Rarity calculation for Impossible Levels (Entry is 1 in 100,000, Top 1 is 1 in 10,000,000)
+// Rarity calculation for Impossible Levels (Entry is 1 in 100,000, Secret #0 is 1 in 10,000,001)
 export function calculateIllRarity(position: number, total: number = 2097): number {
+  if (position <= 0) return 10000001; // Secret #0 Stereo Madness (1 in 10,000,001)
   if (position <= 1) return 10000000; // Top 1 Open Window (1 in 10,000,000)
   if (position <= 10) return Math.round(9000000 - (position - 2) * 444444); // Top 10 ILL (~5M to 9M)
   if (position <= 50) return Math.round(5000000 - (position - 10) * 75000); // Top 50 ILL (2M to 5M)
@@ -203,30 +207,34 @@ export function isHarder(demonA: DemonLevel, demonB: DemonLevel | null): boolean
 
 /**
  * Sample an ILL level according to the exact requested sub-tier probabilities:
- * Ranks <= 1 (Open Window #1): 2% (buffed 2x from 1%)
+ * Ranks <= 0 (Stereo Madness #0): 1%
+ * Rank 1 (Open Window #1): 2%
  * Ranks 2..10 (Top 10 ILL): 10%
  * Ranks 11..100 (Top 100 ILL): 25%
- * Ranks 101+ (Top 1000+ ILL): 63%
+ * Ranks 101+ (Top 1000+ ILL): 62%
  */
 function sampleIllLevel(allowedIllLevels: DemonLevel[], randVal: number): DemonLevel {
-  const top1Pool = allowedIllLevels.filter((d) => d.position <= 1);
+  const top0Pool = allowedIllLevels.filter((d) => d.position <= 0);
+  const top1Pool = allowedIllLevels.filter((d) => d.position === 1);
   const top10Pool = allowedIllLevels.filter((d) => d.position >= 2 && d.position <= 10);
   const top100Pool = allowedIllLevels.filter((d) => d.position >= 11 && d.position <= 100);
   const lowerPool = allowedIllLevels.filter((d) => d.position >= 101);
 
-  // Target weights: 0.02 (2% - 2x buffed), 0.10 (10%), 0.25 (25%), 0.63 (63%)
+  // Target weights: 0.01 (1%), 0.02 (2%), 0.10 (10%), 0.25 (25%), 0.62 (62%)
+  let wTop0 = top0Pool.length > 0 ? 0.01 : 0;
   let wTop1 = top1Pool.length > 0 ? 0.02 : 0;
   let wTop10 = top10Pool.length > 0 ? 0.10 : 0;
   let wTop100 = top100Pool.length > 0 ? 0.25 : 0;
-  let wLower = lowerPool.length > 0 ? 0.63 : 0;
+  let wLower = lowerPool.length > 0 ? 0.62 : 0;
 
-  const totalW = wTop1 + wTop10 + wTop100 + wLower;
+  const totalW = wTop0 + wTop1 + wTop10 + wTop100 + wLower;
   if (totalW === 0) {
     const idx = Math.min(Math.floor(randVal * allowedIllLevels.length), allowedIllLevels.length - 1);
     return allowedIllLevels[idx];
   }
 
   // Normalize weights
+  wTop0 /= totalW;
   wTop1 /= totalW;
   wTop10 /= totalW;
   wTop100 /= totalW;
@@ -235,23 +243,28 @@ function sampleIllLevel(allowedIllLevels: DemonLevel[], randVal: number): DemonL
   let chosenPool: DemonLevel[];
   let subRand = randVal;
 
-  if (randVal < wTop1) {
+  if (randVal < wTop0) {
+    chosenPool = top0Pool;
+    subRand = randVal / wTop0;
+  } else if (randVal < wTop0 + wTop1) {
     chosenPool = top1Pool;
-    subRand = randVal / wTop1;
-  } else if (randVal < wTop1 + wTop10) {
+    subRand = (randVal - wTop0) / wTop1;
+  } else if (randVal < wTop0 + wTop1 + wTop10) {
     chosenPool = top10Pool;
-    subRand = (randVal - wTop1) / wTop10;
-  } else if (randVal < wTop1 + wTop10 + wTop100) {
+    subRand = (randVal - wTop0 - wTop1) / wTop10;
+  } else if (randVal < wTop0 + wTop1 + wTop10 + wTop100) {
     chosenPool = top100Pool;
-    subRand = (randVal - wTop1 - wTop10) / wTop100;
+    subRand = (randVal - wTop0 - wTop1 - wTop10) / wTop100;
   } else {
     chosenPool = lowerPool;
-    subRand = (randVal - wTop1 - wTop10 - wTop100) / wLower;
+    subRand = (randVal - wTop0 - wTop1 - wTop10 - wTop100) / wLower;
   }
 
   const idx = Math.min(Math.floor(subRand * chosenPool.length), chosenPool.length - 1);
   return chosenPool[idx];
 }
+
+
 
 /**
  * Sample a standard AREDL level based on standard rarity weights

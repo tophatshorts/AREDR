@@ -31,8 +31,8 @@ export const StatTrackerModal: React.FC<Props> = ({
   const unlockedSet = new Set(stats.unlockedDemonIds);
   const hardest = stats.hardestDemon;
 
-  // Active target pool for codex
-  const activePool = codexListType === 'ill' ? impossibleLevels : allDemons;
+  // Active target pool for codex (excluding secret #0 Stereo Madness)
+  const activePool = (codexListType === 'ill' ? impossibleLevels : allDemons).filter(d => !(d.position === 0 && d.isImpossible));
 
   // Filter demons for the codex
   const filteredDemons = activePool.filter((d) => {
@@ -394,7 +394,7 @@ export const StatTrackerModal: React.FC<Props> = ({
                               {isIll ? `ILL #${demon.position}` : `#${demon.position}`}
                             </span>
                             <span className="font-bold text-sm text-zinc-100">
-                              {demon.name}
+                              {demon.position === 0 && isIll ? 'Stereo Madness…?' : demon.name}
                             </span>
                             {isIll && (
                               <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-500/30 border border-purple-400/50 text-purple-200 font-mono font-bold">
