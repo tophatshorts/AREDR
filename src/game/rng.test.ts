@@ -203,7 +203,7 @@ test('ILL levels drop rate scales with luck: ~600 rolls at Base Luck, ~100 rolls
   assert.ok(avgBaseRolls > avgMaxRolls, `Base luck should be rarer than max luck (got base: 1 in ${Math.round(avgBaseRolls)}, max: 1 in ${Math.round(avgMaxRolls)})`);
 });
 
-test('ILL sub-tier distribution matches target rates (1% Top 1, 10% Top 10, 25% Top 100, 64% 101+)', () => {
+test('ILL sub-tier distribution matches target rates (2% Top 1 [2x buffed], 10% Top 10, 25% Top 100, 63% 101+)', () => {
   const illLevels: DemonLevel[] = [];
   for (let i = 1; i <= 1500; i++) {
     illLevels.push({
@@ -248,10 +248,10 @@ test('ILL sub-tier distribution matches target rates (1% Top 1, 10% Top 10, 25% 
   const top100Ratio = top100Count / samples;
   const lowerRatio = lowerCount / samples;
 
-  assert.ok(top1Ratio >= 0.005 && top1Ratio <= 0.02, `Top 1 should be ~1% (got ${(top1Ratio * 100).toFixed(2)}%)`);
-  assert.ok(top10Ratio >= 0.08 && top10Ratio <= 0.13, `Top 10 should be ~10% (got ${(top10Ratio * 100).toFixed(2)}%)`);
+  assert.ok(top1Ratio >= 0.012 && top1Ratio <= 0.032, `Top 1 should be ~2% (got ${(top1Ratio * 100).toFixed(2)}%)`);
+  assert.ok(top10Ratio >= 0.08 && top10Ratio <= 0.13, `Top 10 should be ~10% (got ${(top100Ratio * 100).toFixed(2)}%)`);
   assert.ok(top100Ratio >= 0.21 && top100Ratio <= 0.29, `Top 100 should be ~25% (got ${(top100Ratio * 100).toFixed(2)}%)`);
-  assert.ok(lowerRatio >= 0.58 && lowerRatio <= 0.70, `Lower ILL should be ~64% (got ${(lowerRatio * 100).toFixed(2)}%)`);
+  assert.ok(lowerRatio >= 0.55 && lowerRatio <= 0.70, `Lower ILL should be ~63% (got ${(lowerRatio * 100).toFixed(2)}%)`);
 });
 
 

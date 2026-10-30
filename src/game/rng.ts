@@ -203,10 +203,10 @@ export function isHarder(demonA: DemonLevel, demonB: DemonLevel | null): boolean
 
 /**
  * Sample an ILL level according to the exact requested sub-tier probabilities:
- * Ranks <= 1 (Open Window #1): 1%
+ * Ranks <= 1 (Open Window #1): 2% (buffed 2x from 1%)
  * Ranks 2..10 (Top 10 ILL): 10%
  * Ranks 11..100 (Top 100 ILL): 25%
- * Ranks 101+ (Top 1000+ ILL): 64%
+ * Ranks 101+ (Top 1000+ ILL): 63%
  */
 function sampleIllLevel(allowedIllLevels: DemonLevel[], randVal: number): DemonLevel {
   const top1Pool = allowedIllLevels.filter((d) => d.position <= 1);
@@ -214,11 +214,11 @@ function sampleIllLevel(allowedIllLevels: DemonLevel[], randVal: number): DemonL
   const top100Pool = allowedIllLevels.filter((d) => d.position >= 11 && d.position <= 100);
   const lowerPool = allowedIllLevels.filter((d) => d.position >= 101);
 
-  // Target weights: 0.01 (1%), 0.10 (10%), 0.25 (25%), 0.64 (64%)
-  let wTop1 = top1Pool.length > 0 ? 0.01 : 0;
+  // Target weights: 0.02 (2% - 2x buffed), 0.10 (10%), 0.25 (25%), 0.63 (63%)
+  let wTop1 = top1Pool.length > 0 ? 0.02 : 0;
   let wTop10 = top10Pool.length > 0 ? 0.10 : 0;
   let wTop100 = top100Pool.length > 0 ? 0.25 : 0;
-  let wLower = lowerPool.length > 0 ? 0.64 : 0;
+  let wLower = lowerPool.length > 0 ? 0.63 : 0;
 
   const totalW = wTop1 + wTop10 + wTop100 + wLower;
   if (totalW === 0) {
