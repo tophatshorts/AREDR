@@ -5,7 +5,7 @@ import { sound } from '../game/sound';
 import { DemonDifficultyIcon } from './DemonDifficultyIcon';
 import { RatingBadge } from './RatingBadge';
 import { DemonThumbnail } from './DemonThumbnail';
-import { AlertTriangle, Sparkles, X, Trophy, Activity, Zap, Shield, Flame } from 'lucide-react';
+import { AlertTriangle, Sparkles, X, Trophy, Activity, Zap, Shield, Flame, Play } from 'lucide-react';
 
 interface Props {
   demon: DemonLevel;
@@ -19,6 +19,7 @@ type CutscenePhase = 'intro' | 'breach' | 'shatter' | 'climax';
 export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, cutsceneType }) => {
   const [phase, setPhase] = useState<CutscenePhase>('intro');
   const [pulseCount, setPulseCount] = useState<number>(0);
+  const [isVideoBlocked, setIsVideoBlocked] = useState<boolean>(false);
   const pos = demon.position;
   const isIll = demon.isImpossible || cutsceneType?.startsWith('ill');
 
@@ -51,10 +52,13 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
       sound.playGriefCinematic();
       if (videoRef.current) {
         videoRef.current.muted = true;
-        videoRef.current.play().catch((err) => {
-          console.warn("Mobile autoplay notice:", err);
-          // Allow fallback or user click if blocked
-        });
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn("Mobile autoplay prevented:", err);
+            setIsVideoBlocked(true);
+          });
+        }
       }
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
@@ -125,21 +129,43 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
     }
   };
 
-  // 1. TOP VIDEO CUTSCENES (#0 Stereo Madness, #1 Open Window / Grief, #2 Vortex Crush, #3 Crush)
+  const handleVideoContainerClick = () => {
+    if (videoRef.current && isVideoBlocked) {
+      videoRef.current.play().then(() => {
+        setIsVideoBlocked(false);
+      }).catch((err) => {
+        console.warn("Manual play retry failed:", err);
+      });
+    }
+  };
+
+  // 1. TOP VIDEO CUTSCENES (#0 Stereo Madness, #1 Open Window / Grief, #2 Cortex Break, #3 Crush)
   if ((isIll && pos <= 3) || (!isIll && pos === 1)) {
     let videoSrc = '';
     const baseUrl = import.meta.env.BASE_URL || '';
     if (isIll) {
-      if (pos === 0) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-17-09_1_455669a7.mp4`;
-      else if (pos === 1) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mp4`;
-      else if (pos === 2) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-21-40_1_200f7903.mp4`;
-      else if (pos === 3) videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-30-2026_08-22-39_1_1c312453.mp4`;
+      if (pos === 0) {
+        // Stereo Madness Cutscene
+        videoSrc = `${baseUrl}assets/ScreenRecording_10-30-2026 08-17-09_1.mov`;
+      } else if (pos === 1) {
+        // Open Window Cutscene
+        videoSrc = `${baseUrl}assets/aistudio/ScreenRecording_10-29-2026_14-38-21_1_08bf3413.mp4`;
+      } else if (pos === 2) {
+        // Cortex Break Cutscene
+        videoSrc = `${baseUrl}assets/ScreenRecording_10-30-2026 08-21-40_1-compressed.mp4`;
+      } else if (pos === 3) {
+        // Crush Cutscene
+        videoSrc = `${baseUrl}assets/ScreenRecording_10-30-2026 08-22-39_1-compressed.mp4`;
+      }
     } else {
       videoSrc = `${baseUrl}assets/videos/grief_cutscene.mp4`;
     }
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none">
+      <div 
+        onClick={handleVideoContainerClick}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden select-none cursor-pointer"
+      >
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -151,6 +177,14 @@ export const CutsceneOverlay: React.FC<Props> = ({ demon, rollNumber, onClose, c
           <span>Skip</span>
           <X className="w-3.5 h-3.5" />
         </button>
+
+        {/* Fallback prompt for blocked autoplay on mobile */}
+        {isVideoBlocked && (
+          <div className="absolute z-40 flex flex-col items-center gap-3 px-6 py-4 rounded-2xl bg-zinc-900/90 border border-purple-500/50 text-white shadow-2xl pointer-events-none animate-pulse">
+            <Play className="w-8 h-8 text-purple-400" />
+            <p className="text-xs font-mono uppercase tracking-widest text-zinc-300">Tap anywhere to play video</p>
+          </div>
+        )}
 
         <video
           ref={videoRef}
