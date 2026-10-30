@@ -10,6 +10,7 @@ interface Props {
   isSpinning: boolean;
   isQuickRoll: boolean;
   quickRollSpeedLevel?: number;
+  activeSpeedLevel?: number | null;
   onSpinComplete: () => void;
 }
 
@@ -28,6 +29,7 @@ export const CS2Spinner: React.FC<Props> = ({
   isSpinning,
   isQuickRoll,
   quickRollSpeedLevel = 0,
+  activeSpeedLevel = null,
   onSpinComplete,
 }) => {
   const [currentStage, setCurrentStage] = useState<'idle' | 'stage1' | 'stage2'>('idle');
@@ -45,17 +47,20 @@ export const CS2Spinner: React.FC<Props> = ({
 
   const timersRef = useRef<{
     tick1?: NodeJS.Timeout;
-    tick2?: NodeJS.Timeout;
+    tick2Timers?: NodeJS.Timeout[];
     start1?: NodeJS.Timeout;
     finish1?: NodeJS.Timeout;
     pause?: NodeJS.Timeout;
     start2?: NodeJS.Timeout;
     finish2?: NodeJS.Timeout;
-  }>({});
+  }>({ tick2Timers: [] });
 
   const clearAllTimers = () => {
     if (timersRef.current.tick1) clearInterval(timersRef.current.tick1);
-    if (timersRef.current.tick2) clearInterval(timersRef.current.tick2);
+    if (timersRef.current.tick2Timers) {
+      timersRef.current.tick2Timers.forEach((t) => clearTimeout(t));
+      timersRef.current.tick2Timers = [];
+    }
     if (timersRef.current.start1) clearTimeout(timersRef.current.start1);
     if (timersRef.current.finish1) clearTimeout(timersRef.current.finish1);
     if (timersRef.current.pause) clearTimeout(timersRef.current.pause);
@@ -70,6 +75,11 @@ export const CS2Spinner: React.FC<Props> = ({
       isSpinningRef.current = false;
     };
   }, []);
+
+  const effectiveSpeedLevel =
+    activeSpeedLevel !== null && activeSpeedLevel !== undefined
+      ? Math.min(quickRollSpeedLevel, Math.max(0, activeSpeedLevel))
+      : quickRollSpeedLevel;
 
   // Trigger spin logic on isSpinning transition
   useEffect(() => {
@@ -88,7 +98,7 @@ export const CS2Spinner: React.FC<Props> = ({
       const cardTotal = cardWidth + gap;
       const containerWidth = containerRef.current?.offsetWidth || 800;
 
-      const speedTier = QUICK_ROLL_SPEED_LEVELS[quickRollSpeedLevel || 0] || QUICK_ROLL_SPEED_LEVELS[0];
+      const speedTier = QUICK_ROLL_SPEED_LEVELS[effectiveSpeedLevel] || QUICK_ROLL_SPEED_LEVELS[0];
 
       if (isIll) {
         // ==========================================
@@ -138,7 +148,7 @@ export const CS2Spinner: React.FC<Props> = ({
 
         const targetOffset1 = targetIndex * cardTotal + cardTotal / 2 - containerWidth / 2;
         const finalTranslate1 = -(targetOffset1 + (Math.random() - 0.5) * 30);
-        const durationStage1 = isQuickRoll ? Math.max(130, speedTier.durationMs * 0.45) : 2200;
+        const durationStage1 = isQuickRoll ? Math.max(120, speedTier.durationMs * 0.45) : 2000;
 
         sound.playRollWhoosh();
 
@@ -163,12 +173,12 @@ export const CS2Spinner: React.FC<Props> = ({
           if (timersRef.current.tick1) clearInterval(timersRef.current.tick1);
           sound.playCutscene(); // Dramatic ILL chime
 
-          const pauseDuration = isQuickRoll ? 60 : 380;
+          const pauseDuration = isQuickRoll ? 80 : 400;
 
           timersRef.current.pause = setTimeout(() => {
             setCurrentStage('stage2');
 
-            // 2. Build Stage 2 Reel (ILL levels slowing down to targetDemon)
+            // 2. Build Stage 2 Reel (ILL levels slowing down dramatically to targetDemon)
             const illPool = impossibleLevels.length > 0 ? impossibleLevels : [targetDemon];
             const list2: ReelCard[] = [];
 
@@ -196,21 +206,31 @@ export const CS2Spinner: React.FC<Props> = ({
             setActiveTransition2(false);
 
             const targetOffset2 = targetIndex * cardTotal + cardTotal / 2 - containerWidth / 2;
-            const finalTranslate2 = -(targetOffset2 + (Math.random() - 0.5) * 20);
-            const durationStage2 = isQuickRoll ? Math.max(220, speedTier.durationMs * 0.65) : 4000;
+            const finalTranslate2 = -(targetOffset2 + (Math.random() - 0.5) * 15);
+
+            // Stage 2 duration: 2,200ms on Quick Roll, 5,500ms on Normal Roll for maximum dramatic deceleration!
+            const durationStage2 = isQuickRoll ? 2200 : 5500;
 
             sound.playRollWhoosh();
 
-            // Slowing ticker for Stage 2
-            if (!isQuickRoll) {
-              let ticks2 = 0;
-              timersRef.current.tick2 = setInterval(() => {
-                if (ticks2 < targetIndex) {
+            // Decelerating Ticker Ticks for Stage 2
+            const totalStage2Ticks = 28;
+            let accumTime = 0;
+            const newTick2Timers: NodeJS.Timeout[] = [];
+
+            for (let t = 0; t < totalStage2Ticks; t++) {
+              const progress = t / totalStage2Ticks;
+              const stepDelay = 20 + Math.pow(progress, 2.8) * 380;
+              accumTime += stepDelay;
+
+              if (accumTime < durationStage2 - 100) {
+                const timerId = setTimeout(() => {
                   sound.playTickerTick();
-                  ticks2++;
-                }
-              }, durationStage2 / (targetIndex * 1.2));
+                }, accumTime);
+                newTick2Timers.push(timerId);
+              }
             }
+            timersRef.current.tick2Timers = newTick2Timers;
 
             timersRef.current.start2 = setTimeout(() => {
               setActiveTransition2(true);
@@ -219,12 +239,11 @@ export const CS2Spinner: React.FC<Props> = ({
 
             // Stage 2 finished landing on target ILL level
             timersRef.current.finish2 = setTimeout(() => {
-              if (timersRef.current.tick2) clearInterval(timersRef.current.tick2);
               isSpinningRef.current = false;
               setShowIllBanner(false);
               setCurrentStage('idle');
               onSpinComplete();
-            }, durationStage2 + (isQuickRoll ? 30 : 100));
+            }, durationStage2 + 80);
 
           }, pauseDuration);
 
@@ -315,20 +334,18 @@ export const CS2Spinner: React.FC<Props> = ({
     allDemons,
     impossibleLevels,
     isQuickRoll,
-    quickRollSpeedLevel,
+    effectiveSpeedLevel,
     onSpinComplete,
   ]);
 
-  const speedTier = QUICK_ROLL_SPEED_LEVELS[quickRollSpeedLevel || 0] || QUICK_ROLL_SPEED_LEVELS[0];
-
-  // Duration & Easing parameters
+  const speedTier = QUICK_ROLL_SPEED_LEVELS[effectiveSpeedLevel] || QUICK_ROLL_SPEED_LEVELS[0];
   const isIllRoll = Boolean(targetDemon?.isImpossible);
 
   const durationSecStage1 = `${(
     (isIllRoll
       ? isQuickRoll
-        ? Math.max(130, speedTier.durationMs * 0.45)
-        : 2200
+        ? Math.max(120, speedTier.durationMs * 0.45)
+        : 2000
       : isQuickRoll
       ? speedTier.durationMs
       : targetDemon && targetDemon.position <= 150
@@ -336,15 +353,14 @@ export const CS2Spinner: React.FC<Props> = ({
       : 3200) / 1000
   ).toFixed(2)}s`;
 
-  const durationSecStage2 = `${(
-    (isQuickRoll ? Math.max(220, speedTier.durationMs * 0.65) : 4000) / 1000
-  ).toFixed(2)}s`;
+  const durationSecStage2 = `${((isQuickRoll ? 2200 : 5500) / 1000).toFixed(2)}s`;
 
   const easingStage1 = isQuickRoll
     ? 'cubic-bezier(0.15, 0.85, 0.35, 1.0)'
     : 'cubic-bezier(0.12, 0.85, 0.25, 1.0)';
 
-  const easingStage2 = 'cubic-bezier(0.04, 0.96, 0.08, 1.0)'; // Ultra-dramatic slowing reel deceleration
+  // Dramatic deceleration curve for Stage 2
+  const easingStage2 = 'cubic-bezier(0.01, 0.98, 0.05, 1.0)';
 
   const activeCards = currentStage === 'stage2' ? cards2 : cards1;
   const activeTranslateX = currentStage === 'stage2' ? translateX2 : translateX1;
@@ -357,7 +373,7 @@ export const CS2Spinner: React.FC<Props> = ({
       ref={containerRef}
       className={`relative w-full overflow-hidden rounded-2xl bg-black/90 border py-4 shadow-2xl backdrop-blur-md select-none transition-colors duration-500 ${
         currentStage === 'stage2' || showIllBanner
-          ? 'border-fuchsia-500/80 shadow-[0_0_30px_rgba(217,70,239,0.4)]'
+          ? 'border-fuchsia-500/80 shadow-[0_0_35px_rgba(217,70,239,0.5)]'
           : 'border-zinc-800/90'
       }`}
     >

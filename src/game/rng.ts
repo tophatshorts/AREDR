@@ -151,8 +151,12 @@ export const STREAK_LEVELS = [
   { level: 6, bonusPerDryRoll: 0.1, maxSurge: 15.0, label: 'Surge VI (+15x)', cost: 1500000 },
 ];
 
-export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number = 0) {
-  const luckTier = LUCK_LEVELS[upgrades.luckLevel] || LUCK_LEVELS[0];
+export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number = 0, activeLuckOverride?: number | null) {
+  const effectiveLuckLevel = activeLuckOverride !== null && activeLuckOverride !== undefined
+    ? Math.min(upgrades.luckLevel, Math.max(0, activeLuckOverride))
+    : upgrades.luckLevel;
+
+  const luckTier = LUCK_LEVELS[effectiveLuckLevel] || LUCK_LEVELS[0];
   const baseLuck = luckTier.mult;
   const currentRebirthTier = REBIRTH_TIERS[Math.min(3, upgrades.rebirthCount || 0)] || REBIRTH_TIERS[0];
   const rebirthMult = currentRebirthTier.luckMult;
@@ -167,6 +171,7 @@ export function getEffectiveLuck(upgrades: PlayerUpgrades, streakCount: number =
     streakLuck,
     totalLuck,
     hasImpossibleUnlocked: Boolean(upgrades.rebirthCount && upgrades.rebirthCount >= 1),
+    effectiveLuckLevel,
   };
 }
 
@@ -298,13 +303,14 @@ export function executeRoll(
   streakCount: number = 0,
   deterministicSeed?: number,
   impossibleLevels: DemonLevel[] = [],
-  testIllOnly: boolean = false
+  testIllOnly: boolean = false,
+  activeLuckOverride?: number | null
 ): RollResult {
   if (allDemons.length === 0 && impossibleLevels.length === 0) {
     throw new Error('No demons provided for roll');
   }
 
-  const { totalLuck, hasImpossibleUnlocked } = getEffectiveLuck(upgrades, streakCount);
+  const { totalLuck, hasImpossibleUnlocked, effectiveLuckLevel } = getEffectiveLuck(upgrades, streakCount, activeLuckOverride);
 
   // Filter ILL level pool based on Rebirth Tier progression
   let allowedIllLevels: DemonLevel[] = [];
@@ -349,7 +355,7 @@ export function executeRoll(
     }
   } else if (hasImpossibleUnlocked && allowedIllLevels.length > 0) {
     // ILL Spin rate scales from 1 in 600 at Base Luck to 1 in 100 at Max Luck
-    const luckProgress = Math.min(1, Math.max(0, upgrades.luckLevel / 10));
+    const luckProgress = Math.min(1, Math.max(0, effectiveLuckLevel / 10));
     const illDropRate = (1 / 600) + luckProgress * ((1 / 100) - (1 / 600));
 
     if (randPrimary < illDropRate) {

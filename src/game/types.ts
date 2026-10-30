@@ -64,6 +64,9 @@ export interface PlayerSettings {
   autoRollStopRankAredl?: number | null; // Stop if AREDL level rank <= this
   autoRollStopRankIll?: number | null; // Stop if ILL level rank <= this
   soundEnabled: boolean;
+  volume?: number; // 0.0 to 1.0 (default 0.8)
+  activeLuckLevel?: number | null; // Selected luck level (0 to max unlocked)
+  activeSpeedLevel?: number | null; // Selected roll speed level (0 to max unlocked)
   screenShake: boolean;
   cutsceneSkipSettings: {
     aredlTop150: boolean;

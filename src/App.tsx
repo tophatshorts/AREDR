@@ -119,6 +119,9 @@ function normalizeProfile(raw: any): PlayerProfile {
           : null,
       autoRollStopRankIll: typeof raw?.settings?.autoRollStopRankIll === 'number' ? raw.settings.autoRollStopRankIll : null,
       soundEnabled: raw?.settings?.soundEnabled !== undefined ? Boolean(raw.settings.soundEnabled) : true,
+      volume: typeof raw?.settings?.volume === 'number' ? Math.min(1, Math.max(0, raw.settings.volume)) : 0.8,
+      activeLuckLevel: typeof raw?.settings?.activeLuckLevel === 'number' ? raw.settings.activeLuckLevel : null,
+      activeSpeedLevel: typeof raw?.settings?.activeSpeedLevel === 'number' ? raw.settings.activeSpeedLevel : null,
       screenShake: raw?.settings?.screenShake !== undefined ? Boolean(raw.settings.screenShake) : true,
       cutsceneSkipSettings: {
         aredlTop150: Boolean(raw?.settings?.cutsceneSkipSettings?.aredlTop150),
@@ -683,10 +686,15 @@ export default function App() {
     sound.playGriefCinematic();
   }
 
-  // Sync mute state
+  // Sync mute and volume state
   useEffect(() => {
-    if (profile) sound.setMuted(!profile.settings.soundEnabled);
-  }, [profile?.settings.soundEnabled]);
+    if (profile) {
+      sound.setMuted(!profile.settings.soundEnabled);
+      if (profile.settings.volume !== undefined) {
+        sound.setVolume(profile.settings.volume);
+      }
+    }
+  }, [profile?.settings.soundEnabled, profile?.settings.volume]);
 
   // Trigger Roll
   function handleRoll() {
@@ -707,7 +715,8 @@ export default function App() {
       currentProf.stats.streakWithoutTop150,
       undefined,
       impossibleLevels,
-      false
+      false,
+      currentProf.settings.activeLuckLevel
     );
 
     setPendingRollResult(result);
@@ -920,7 +929,11 @@ export default function App() {
     );
   }
 
-  const { totalLuck, streakLuck } = getEffectiveLuck(profile.upgrades, profile.stats?.streakWithoutTop150 || 0);
+  const { totalLuck, streakLuck } = getEffectiveLuck(
+    profile.upgrades,
+    profile.stats?.streakWithoutTop150 || 0,
+    profile.settings?.activeLuckLevel
+  );
   const pityTierIndex = Math.min(Math.max(0, profile.upgrades?.pityTierLevel || 0), PITY_LEVELS.length - 1);
   const pityTier = PITY_LEVELS[pityTierIndex] || PITY_LEVELS[0];
   const pityProgress = pityTier.rollsNeeded > 0 ? (profile.stats?.totalRolls || 0) % pityTier.rollsNeeded : 0;
@@ -1083,6 +1096,7 @@ export default function App() {
               isSpinning={isSpinning}
               isQuickRoll={profile.settings.quickRoll}
               quickRollSpeedLevel={profile.upgrades.quickRollSpeedLevel || 0}
+              activeSpeedLevel={profile.settings.activeSpeedLevel}
               onSpinComplete={handleSpinComplete}
             />
           </div>
@@ -1570,6 +1584,7 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           settings={profile.settings}
+          upgrades={profile.upgrades}
           onUpdateSettings={(s) => {
             const next = { ...profile, settings: { ...profile.settings, ...s } };
             setProfile(next);
