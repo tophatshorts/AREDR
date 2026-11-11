@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || (request.auth.token.email != null && request.auth.token.email.matches('.*@aredl\\.game$')));
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Profile Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'username', 'stats', 'upgrades', 'settings']) &&
+             data.id == request.auth.uid &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 32;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidId(userId) && (request.method != 'write' || isValidUser(request.resource.data));
+    }
+
+    // Leaderboard Validation
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'username', 'demonName', 'demonPosition', 'rarity', 'rollsCount', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.username is string && data.username.size() <= 32 &&
+             data.demonPosition is int &&
+             data.rarity is int &&
+             data.rollsCount is int;
+    }
+
+    match /leaderboard/{entryId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(entryId) && isValidLeaderboardEntry(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidLeaderboardEntry(request.resource.data);
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // Reborn data is isolated from the legacy users and leaderboard collections.
+    match /gdrngPlayers/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['save', 'updatedAt', 'username'])
+        && request.resource.data.save is string
+        && request.resource.data.save.size() <= 900000
+        && request.resource.data.updatedAt is number
+        && request.resource.data.updatedAt >= 0
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 1
+        && request.resource.data.username.size() <= 24;
+    }
+    function validRebornScore(data) {
+      return data.keys().hasOnly(['username', 'levelId', 'levelName', 'difficulty', 'difficultyRank', 'rolls', 'updatedAt'])
+        && data.username is string && data.username.size() >= 1 && data.username.size() <= 24
+        && data.levelId is string && data.levelId.matches('^[0-9]+$') && data.levelId.size() <= 20
+        && data.levelName is string && data.levelName.size() >= 1 && data.levelName.size() <= 100
+        && data.difficulty in ['Auto', 'Easy', 'Normal', 'Hard', 'Harder', 'Insane', 'Easy Demon', 'Medium Demon', 'Hard Demon', 'Insane Demon', 'Extreme Demon']
+        && data.difficultyRank is int && data.difficultyRank >= 0 && data.difficultyRank <= 10
+        && data.rolls is int && data.rolls >= 1 && data.rolls <= 1000000000000
+        && data.updatedAt is number && data.updatedAt >= 0;
+    }
+    match /gdrngLeaderboard/{userId} {
+      allow read: if true;
+      allow create, update: if isOwner(userId) && validRebornScore(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+    match /gdrngDaily/{day}/entries/{userId} {
+      allow read: if true;
+      allow create, update: if isOwner(userId) && day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && validRebornScore(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+  }
+}

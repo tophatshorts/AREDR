@@ -1,0 +1,7 @@
+{
+  "indexes": [
+    {"collectionGroup":"gdrngLeaderboard","queryScope":"COLLECTION","fields":[{"fieldPath":"difficultyRank","order":"DESCENDING"},{"fieldPath":"rolls","order":"DESCENDING"}]},
+    {"collectionGroup":"entries","queryScope":"COLLECTION","fields":[{"fieldPath":"difficultyRank","order":"DESCENDING"},{"fieldPath":"rolls","order":"DESCENDING"}]}
+  ],
+  "fieldOverrides": [{"collectionGroup":"gdrngPlayers","fieldPath":"save","indexes":[]}]
+}

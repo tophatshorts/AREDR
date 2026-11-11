@@ -1,0 +1,7 @@
+{
+  "firestore": {
+    "database": "ai-studio-extremedemonrngg-d2dcba04-e57d-4a9d-8c4c-51f9252cd9bc",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
